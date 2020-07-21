@@ -86,14 +86,14 @@
 
 
 
-<meta name="description" content="welcome-lol.md title: 欢迎大家一起来玩LOLdate: 2020-02-24 21:56:12tags: games  什么是英雄联盟？英雄联盟（League of Legends）是由美国Riot Games开发，腾讯游戏运营的全新英雄对战网游。英雄联盟的主创团队由各著名游戏公司的核心美术、策划、程序人员组成，他们打造了游戏中风格特色各异的英雄，加入更加丰富的物品合成系统、">
+<meta name="description" content="自定义View1.1 什么是自定义View？1.2 自定义View的分类1.3 基础1.3.1 构造函数1.3.2 View的视图结构1.3.3 坐标系1.3.4 View绘制的生命周期1.4 MeasureSpec1.5 LayoutParams1.6 流式布局绘制实战1.6.1 onMeasure1.6.2 onLayout">
 <meta property="og:type" content="article">
-<meta property="og:title" content="welcome-lol">
-<meta property="og:url" content="http://yoursite.com/2020/07/17/welcome-lol/index.html">
+<meta property="og:title" content="自定义View">
+<meta property="og:url" content="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/index.html">
 <meta property="og:site_name" content="xuesui的个人博客">
-<meta property="og:description" content="welcome-lol.md title: 欢迎大家一起来玩LOLdate: 2020-02-24 21:56:12tags: games  什么是英雄联盟？英雄联盟（League of Legends）是由美国Riot Games开发，腾讯游戏运营的全新英雄对战网游。英雄联盟的主创团队由各著名游戏公司的核心美术、策划、程序人员组成，他们打造了游戏中风格特色各异的英雄，加入更加丰富的物品合成系统、">
-<meta property="article:published_time" content="2020-07-17T02:50:20.004Z">
-<meta property="article:modified_time" content="2020-07-17T02:53:46.209Z">
+<meta property="og:description" content="自定义View1.1 什么是自定义View？1.2 自定义View的分类1.3 基础1.3.1 构造函数1.3.2 View的视图结构1.3.3 坐标系1.3.4 View绘制的生命周期1.4 MeasureSpec1.5 LayoutParams1.6 流式布局绘制实战1.6.1 onMeasure1.6.2 onLayout">
+<meta property="article:published_time" content="2020-07-21T09:18:17.716Z">
+<meta property="article:modified_time" content="2020-07-21T09:18:17.967Z">
 <meta property="article:author" content="xuesui">
 <meta name="twitter:card" content="summary">
 
@@ -125,13 +125,13 @@
 
 
 
-  <link rel="canonical" href="http://yoursite.com/2020/07/17/welcome-lol/"/>
+  <link rel="canonical" href="http://yoursite.com/2020/07/21/自定义View/"/>
 
 
 
 
 
-  <title>welcome-lol | xuesui的个人博客</title>
+  <title>自定义View | xuesui的个人博客</title>
   
 
 
@@ -258,7 +258,7 @@
   
   
   <div class="post-block">
-    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/07/17/welcome-lol/">
+    <link itemprop="mainEntityOfPage" href="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="name" content="xuesui">
@@ -275,7 +275,7 @@
 
         
         
-          <h1 class="post-title" itemprop="name headline">welcome-lol</h1>
+          <h1 class="post-title" itemprop="name headline">自定义View</h1>
         
 
         <div class="post-meta">
@@ -287,8 +287,8 @@
               
                 <span class="post-meta-item-text">发表于</span>
               
-              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-07-17T10:50:20+08:00">
-                2020-07-17
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2020-07-21T17:18:17+08:00">
+                2020-07-21
               </time>
             
 
@@ -325,26 +325,7 @@
       
 
       
-        <h1 id="welcome-lol-md"><a href="#welcome-lol-md" class="headerlink" title="welcome-lol.md"></a>welcome-lol.md</h1><hr>
-<p>title: 欢迎大家一起来玩LOL<br>date: 2020-02-24 21:56:12<br>tags: games</p>
-<hr>
-<h3 id="什么是英雄联盟？"><a href="#什么是英雄联盟？" class="headerlink" title="什么是英雄联盟？"></a>什么是英雄联盟？</h3><p>英雄联盟（League of Legends）是由美国Riot Games开发，腾讯游戏运营的全新英雄对战网游。英雄联盟的主创团队由各著名游戏公司的核心美术、策划、程序人员组成，他们打造了游戏中风格特色各异的英雄，加入更加丰富的物品合成系统、地图玩法、天梯匹配机制，以及独创的“召唤师”技能、符文、天赋组合，让玩家感受不一样的英雄对战网游。</p>
-<p>在游戏中，玩家将扮演一位召唤者，并选择你所信任的联盟国进入这个游戏的正义领域，为了控制瓦罗然的权利而奋战。在这个联盟中只有一条规则：胜者就是一切！</p>
-<h3 id="全新英雄对战网游"><a href="#全新英雄对战网游" class="headerlink" title="全新英雄对战网游"></a>全新英雄对战网游</h3><p>英雄联盟中拥有的海量英雄及皮肤让人印象深刻——这些英雄不仅在外观上风格迥异，甚至个个都有自己独特的性格和脾气，例如：正气凛然的无畏先锋军团领袖—德玛西亚之力盖伦、意志坚强的弗雷尔卓德部族领袖—寒冰射手艾希、乐于钻研的魔法学者—流浪法师瑞兹……除此之外，你还可以在英雄联盟中看到代表不同地域文化特色的角色或皮肤，其中包括中国武术大师、北欧冰雪巨人、日本忍者、古埃及神话角色等。</p>
-<p>在游戏中，身为召唤师的玩家在每局游戏中都将召唤一位英雄帮助自己进行战斗。目前已经有许多英雄协助他们达成目标，在英雄联盟中完成各自心中的正义之战！我们也深信，在英雄联盟超过100位英雄中，总有一个是合适你的！</p>
-<p>英雄，为你而战！</p>
-<p>注：英雄联盟每周有13位免费英雄可供使用</p>
-<h3 id="初识《英雄联盟》"><a href="#初识《英雄联盟》" class="headerlink" title="初识《英雄联盟》"></a>初识《英雄联盟》</h3><p>首次进入游戏的玩家，系统会提示他选择自己的游戏水平，目前共分为4个等级，分别为</p>
-<ul>
-<li>我是新手</li>
-<li>我玩过英雄对战游戏</li>
-<li>我是高手</li>
-<li>我是大湿</li>
-</ul>
-<blockquote>
-<p>我们强烈建议新手玩家选择等级 <code>我是新手</code> 通过游戏中的新手教程来了解基础操作。</p>
-</blockquote>
-
+        <h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3>
       
     </div>
     
@@ -494,7 +475,7 @@
             
 
             
-              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#welcome-lol-md"><span class="nav-number">1.</span> <span class="nav-text">welcome-lol.md</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#什么是英雄联盟？"><span class="nav-number">1.0.1.</span> <span class="nav-text">什么是英雄联盟？</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#全新英雄对战网游"><span class="nav-number">1.0.2.</span> <span class="nav-text">全新英雄对战网游</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#初识《英雄联盟》"><span class="nav-number">1.0.3.</span> <span class="nav-text">初识《英雄联盟》</span></a></li></ol></li></ol></li></ol></div>
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#自定义View"><span class="nav-number">1.</span> <span class="nav-text">自定义View</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-1-什么是自定义View？"><span class="nav-number">1.1.</span> <span class="nav-text">1.1 什么是自定义View？</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-2-自定义View的分类"><span class="nav-number">1.2.</span> <span class="nav-text">1.2 自定义View的分类</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-3-基础"><span class="nav-number">1.3.</span> <span class="nav-text">1.3 基础</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-3-1-构造函数"><span class="nav-number">1.3.1.</span> <span class="nav-text">1.3.1 构造函数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-3-2-View的视图结构"><span class="nav-number">1.3.2.</span> <span class="nav-text">1.3.2 View的视图结构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-3-3-坐标系"><span class="nav-number">1.3.3.</span> <span class="nav-text">1.3.3 坐标系</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-3-4-View绘制的生命周期"><span class="nav-number">1.3.4.</span> <span class="nav-text">1.3.4 View绘制的生命周期</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-4-MeasureSpec"><span class="nav-number">1.4.</span> <span class="nav-text">1.4 MeasureSpec</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-5-LayoutParams"><span class="nav-number">1.5.</span> <span class="nav-text">1.5 LayoutParams</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-6-流式布局绘制实战"><span class="nav-number">1.6.</span> <span class="nav-text">1.6 流式布局绘制实战</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#1-6-1-onMeasure"><span class="nav-number">1.6.1.</span> <span class="nav-text">1.6.1 onMeasure</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#1-6-2-onLayout"><span class="nav-number">1.6.2.</span> <span class="nav-text">1.6.2 onLayout</span></a></li></ol></li></ol></li></ol></div>
             
 
           </div>
