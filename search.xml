@@ -44,7 +44,7 @@
 <li><p>Android坐标系</p>
 <p>(1)以左上角为坐标原点</p>
 <p>(2)向右为x轴正方向，向下为y轴正方向</p>
-<img src="C:\Users\WIN10\Desktop\图片2.png" alt="图片2" style="zoom:50%;" />
+<img src= "/img/loading.gif" data-src="C:\Users\WIN10\Desktop\图片2.png" alt="图片2" style="zoom:50%;" />
 </li>
 <li><p>View位置坐标系</p>
 <ul>
@@ -57,7 +57,7 @@
 <li><p>Right：子View右边界到父view左边界的距离</p>
 </li>
 </ul>
-<img src="C:\Users\WIN10\Desktop\图片3.png" alt="图片3" style="zoom:50%;" />
+<img src= "/img/loading.gif" data-src="C:\Users\WIN10\Desktop\图片3.png" alt="图片3" style="zoom:50%;" />
 </li>
 <li><p>获取位置的方法</p>
 <ul>
@@ -66,10 +66,10 @@
 </ul>
 </li>
 </ul>
-<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="C:\Users\WIN10\Desktop\图片4.png" alt="图片4" style="zoom:75%;" />
+<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src= "/img/loading.gif" data-src="C:\Users\WIN10\Desktop\图片4.png" alt="图片4" style="zoom:75%;" />
 
 <h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
-<img src="C:\Users\WIN10\Desktop\图片1.png" alt="图片1" style="zoom:75%;" />
+<img src= "/img/loading.gif" data-src="C:\Users\WIN10\Desktop\图片1.png" alt="图片1" style="zoom:75%;" />
 
 <h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
 <li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
@@ -87,10 +87,10 @@
 <p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
 <ul>
 <li><p>原理</p>
-<img src="C:\Users\WIN10\Desktop\图片5.png" alt="图片5" style="zoom:75%;" />
+<img src= "/img/loading.gif" data-src="C:\Users\WIN10\Desktop\图片5.png" alt="图片5" style="zoom:75%;" />
 
 <p>通俗易懂的一个例子：</p>
-<img src="C:\Users\WIN10\Desktop\图片6.png" alt="图片6" style="zoom:75%;" />
+<img src= "/img/loading.gif" data-src="C:\Users\WIN10\Desktop\图片6.png" alt="图片6" style="zoom:75%;" />
 
 </li>
 </ul>
