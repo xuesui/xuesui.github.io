@@ -13,17 +13,17 @@
 <meta property="og:url" content="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/index.html">
 <meta property="og:site_name" content="xuesui的个人博客">
 <meta property="og:description" content="自定义View1.1 什么是自定义View？​    自定义View大体上就是三个步骤：  布局：onMeasure , onLayout 绘制: onDraw 事件分发：onTouchEvent  1.2 自定义View的分类 View类型：实现OnMeasure和OnDraw ViewGroup类型：实现OnMeasure和OnLayout  1.3 基础1.3.1 构造函数123456789">
-<meta property="og:image" content="d:/BLOG/hexoblog/themes/next/source/images/图片2.png">
-<meta property="og:image" content="d:/BLOG/hexoblog/source/images/图片3.png">
-<meta property="og:image" content="d:/BLOG/hexoblog/source/images/图片4.png">
-<meta property="og:image" content="d:/BLOG/hexoblog/source/images/图片1.png">
-<meta property="og:image" content="d:%5CBLOG%5Chexoblog%5Csource%5Cimages%5C%E5%9B%BE%E7%89%875.png">
-<meta property="og:image" content="d:/BLOG/hexoblog/source/images/图片6.png">
+<meta property="og:image" content="http://yoursite.com/.com//BLOG/hexoblog/source/_posts/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png">
+<meta property="og:image" content="http://yoursite.com/.com//BLOG/hexoblog/source/_posts/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png">
+<meta property="og:image" content="http://yoursite.com/.com//BLOG/hexoblog/source/_posts/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png">
+<meta property="og:image" content="http://yoursite.com/.com//BLOG/hexoblog/source/_posts/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png">
+<meta property="og:image" content="http://yoursite.com/.com//D:%5CBLOG%5Chexoblog%5Csource_posts%5C%E8%87%AA%E5%AE%9A%E4%B9%89View%5C%E5%9B%BE%E7%89%875.png">
+<meta property="og:image" content="http://yoursite.com/.com//BLOG/hexoblog/source/_posts/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png">
 <meta property="article:published_time" content="2020-07-21T09:18:17.716Z">
-<meta property="article:modified_time" content="2020-07-22T06:22:40.532Z">
+<meta property="article:modified_time" content="2020-07-22T06:33:00.669Z">
 <meta property="article:author" content="xuesui">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="d:/BLOG/hexoblog/themes/next/source/images/图片2.png">
+<meta name="twitter:image" content="http://yoursite.com/.com//BLOG/hexoblog/source/_posts/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png">
   
     <link rel="alternate" href="/atom.xml" title="xuesui的个人博客" type="application/atom+xml">
   
@@ -121,7 +121,7 @@
 <li><p>Android坐标系</p>
 <p>(1)以左上角为坐标原点</p>
 <p>(2)向右为x轴正方向，向下为y轴正方向</p>
-<img src="D:\BLOG\hexoblog\themes\next\source\images\图片2.png" alt="图片2" style="zoom:67%;" />
+<img src="/.com//BLOG\hexoblog\source\_posts\自定义View\图片2.png" alt="Android屏幕坐标系" style="zoom:67%;">
 </li>
 <li><p>View位置坐标系</p>
 <ul>
@@ -134,7 +134,7 @@
 <li><p>Right：子View右边界到父view左边界的距离</p>
 </li>
 </ul>
-<img src="D:\BLOG\hexoblog\source\images\图片3.png" alt="视角坐标系" style="zoom:67%;" />
+<img src="/.com//BLOG\hexoblog\source\_posts\自定义View\图片3.png" alt="视角坐标系" style="zoom:67%;">
 </li>
 <li><p>获取位置的方法</p>
 <ul>
@@ -143,10 +143,10 @@
 </ul>
 </li>
 </ul>
-<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="D:\BLOG\hexoblog\source\images\图片4.png" alt="生命周期" style="zoom:67%;" />
+<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/.com//BLOG\hexoblog\source\_posts\自定义View\图片4.png" alt="生命周期" style="zoom:67%;">
 
 <h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
-<img src="D:\BLOG\hexoblog\source\images\图片1.png" alt="层级结构" style="zoom:67%;" />
+<img src="/.com//BLOG\hexoblog\source\_posts\自定义View\图片1.png" alt="层级结构" style="zoom:67%;">
 
 <h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
 <li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
@@ -164,9 +164,9 @@
 <p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
 <ul>
 <li><p>原理</p>
-<p><img src="D:%5CBLOG%5Chexoblog%5Csource%5Cimages%5C%E5%9B%BE%E7%89%875.png" alt="图片5"></p>
+<p><img src="/.com//D:%5CBLOG%5Chexoblog%5Csource_posts%5C%E8%87%AA%E5%AE%9A%E4%B9%89View%5C%E5%9B%BE%E7%89%875.png" alt="图片5"></p>
 <p>通俗易懂的一个例子：</p>
-<img src="D:\BLOG\hexoblog\source\images\图片6.png" alt="例子" style="zoom:67%;" />
+<img src="/.com//BLOG\hexoblog\source\_posts\自定义View\图片6.png" alt="例子" style="zoom:67%;">
 
 </li>
 </ul>
@@ -195,7 +195,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" data-id="ckcwzd2tn000268vba98i2bnv" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" data-id="ckcwzq4cd0003kkvbakbj4uhy" class="article-share-link">Share</a>
       
       
     </footer>
