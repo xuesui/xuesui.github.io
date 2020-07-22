@@ -1,7 +1,334 @@
-extends includes/layout.pug
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
 
-block content
-  include ./includes/mixins/post-ui.pug
-  #recent-posts.recent-posts
-    +postUI
-    include includes/pagination.pug
+  
+  <title>xuesui的个人博客</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="xuesui的个人博客">
+<meta property="og:type" content="website">
+<meta property="og:title" content="xuesui的个人博客">
+<meta property="og:url" content="http://yoursite.com/index.html">
+<meta property="og:site_name" content="xuesui的个人博客">
+<meta property="og:description" content="xuesui的个人博客">
+<meta property="article:author" content="xuesui">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="xuesui的个人博客" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">xuesui的个人博客</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">xuesui</a>
+        </h2>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-自定义View" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" class="article-date">
+  <time datetime="2020-07-21T09:18:17.716Z" itemprop="datePublished">2020-07-21</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/">自定义View</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
+<ul>
+<li>布局：onMeasure , onLayout</li>
+<li>绘制: onDraw</li>
+<li>事件分发：onTouchEvent</li>
+</ul>
+<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
+<li>View类型：实现OnMeasure和OnDraw</li>
+<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
+</ul>
+<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
+<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
+<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
+<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
+</ol>
+<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
+<li><p>Android坐标系</p>
+<p>(1)以左上角为坐标原点</p>
+<p>(2)向右为x轴正方向，向下为y轴正方向</p>
+<img src="C:\Users\WIN10\Desktop\图片2.png" alt="图片2" style="zoom:50%;" />
+</li>
+<li><p>View位置坐标系</p>
+<ul>
+<li><p>Top：子View上边界到父view上边界的距离</p>
+</li>
+<li><p>Left：子View左边界到父view左边界的距离</p>
+</li>
+<li><p>Bottom：子View下边距到父View上边界的距离</p>
+</li>
+<li><p>Right：子View右边界到父view左边界的距离</p>
+</li>
+</ul>
+<img src="C:\Users\WIN10\Desktop\图片3.png" alt="图片3" style="zoom:50%;" />
+</li>
+<li><p>获取位置的方法</p>
+<ul>
+<li>调用get方法获取相对于父View的距离</li>
+<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
+</ul>
+</li>
+</ul>
+<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="C:\Users\WIN10\Desktop\图片4.png" alt="图片4" style="zoom:75%;" />
+
+<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
+<img src="C:\Users\WIN10\Desktop\图片1.png" alt="图片1" style="zoom:75%;" />
+
+<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
+<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
+</li>
+<li><p>其中mode类型包括：</p>
+<ul>
+<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
+<li>EXACTLY：确切的大小，如：100dp</li>
+<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
+</ul>
+</li>
+</ul>
+<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
+<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
+<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
+<ul>
+<li><p>原理</p>
+<img src="C:\Users\WIN10\Desktop\图片5.png" alt="图片5" style="zoom:75%;" />
+
+<p>通俗易懂的一个例子：</p>
+<img src="C:\Users\WIN10\Desktop\图片6.png" alt="图片6" style="zoom:75%;" />
+
+</li>
+</ul>
+<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
+<li><p>先度量孩子</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<ul>
+<li><p>再度量自己</p>
+<figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
+
+<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
+</li>
+</ul>
+<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
+
+<p>调用layout方法进行布局</p>
+<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
+<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
+<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3>
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" data-id="ckcwytcw70003egvb2y1q729p" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-hello-world" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/07/16/hello-world/" class="article-date">
+  <time datetime="2020-07-16T08:57:59.597Z" itemprop="datePublished">2020-07-16</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2020/07/16/hello-world/">Hello World</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
+<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
+<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
+<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
+<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
+
+<p>More info: <a href="https://hexo.io/docs/one-command-deployment.html" target="_blank" rel="noopener">Deployment</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2020/07/16/hello-world/" data-id="ckcwytcw30001egvbhobxh3xe" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/07/">July 2020</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/">自定义View</a>
+          </li>
+        
+          <li>
+            <a href="/2020/07/16/hello-world/">Hello World</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 xuesui<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>
