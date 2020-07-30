@@ -83,6 +83,142 @@
 ]]></content>
   </entry>
   <entry>
+    <title>事件分发二级联动</title>
+    <url>/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/</url>
+    <content><![CDATA[<h1 id="事件分发和二级联动"><a href="#事件分发和二级联动" class="headerlink" title="事件分发和二级联动"></a>事件分发和二级联动</h1><h2 id="1-事件分发流程"><a href="#1-事件分发流程" class="headerlink" title="1 事件分发流程"></a>1 事件分发流程</h2><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%872.png" class title="分发流程">
+
+<ul>
+<li><p>从控件回调回activity开始分发，调用dispatchTouchEvent</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">dispatchTouchEvent</span><span class="params">(MotionEvent ev)</span> </span>&#123;</span><br><span class="line">      <span class="keyword">if</span> (ev.getAction() == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">          onUserInteraction();</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">if</span> (getWindow().superDispatchTouchEvent(ev)) &#123;</span><br><span class="line">          <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">return</span> onTouchEvent(ev);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>进入PhoneWindow中</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">superDispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">return</span> mDecor.superDispatchTouchEvent(event);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>进入DecorView中</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">superDispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">return</span> <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>此时调用父类的dispatchTouchEvent方法，而DecorView的父类是FragmentLayout，并没有重写dispatchTouchEvent方法，所以交给它的父类ViewGroup来调用。</p>
+</li>
+<li><p>从而进一步就进入了View和ViewGroup的树形结构</p>
+<img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%871.png" class title="树形结构">
+
+</li>
+</ul>
+<h3 id="1-1-事件处理（View）"><a href="#1-1-事件处理（View）" class="headerlink" title="1.1 事件处理（View）"></a>1.1 事件处理（View）</h3><ul>
+<li><p>view的dispatchTouchEvent方法</p>
+</li>
+<li><p>关键代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">   <span class="keyword">if</span> (onFilterTouchEventForSecurity(event)) &#123;</span><br><span class="line">         <span class="keyword">if</span> ((mViewFlags &amp; ENABLED_MASK) == ENABLED &amp;&amp; handleScrollBarDragging(event)) &#123;</span><br><span class="line">             result = <span class="keyword">true</span>;</span><br><span class="line">         &#125;</span><br><span class="line">         <span class="comment">/**这一段最关键</span></span><br><span class="line"><span class="comment">         ListenerInfo li = mListenerInfo;</span></span><br><span class="line"><span class="comment">         if (li != null &amp;&amp; li.mOnTouchListener != null</span></span><br><span class="line"><span class="comment">                 &amp;&amp; (mViewFlags &amp; ENABLED_MASK) == ENABLED</span></span><br><span class="line"><span class="comment">                 &amp;&amp; li.mOnTouchListener.onTouch(this, event)) &#123;</span></span><br><span class="line"><span class="comment">             result = true;</span></span><br><span class="line"><span class="comment">         &#125;</span></span><br><span class="line"><span class="comment">**/</span></span><br><span class="line">         <span class="keyword">if</span> (!result &amp;&amp; onTouchEvent(event)) &#123;</span><br><span class="line">             result = <span class="keyword">true</span>;</span><br><span class="line">         &#125;</span><br><span class="line">     &#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    其中mListenerInfo是只要调用了setOnTouchLisener就会初始化的。</p>
+<p>​    判断中的前三个条件都为true，进行到第四个条件的判断，只要OnTouch方法返回的是true，那么result就为true，否则为false。</p>
+<p>​    而result为true时，在下一个if语句中，就无法调用到onTouchEvent，无法在其中调用onClick方法，所以这就是为什么onTouch返回值为true时，onClick事件被拦截。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">performClickInternal() -&gt; performClick() -&gt; li.mOnClickListener.onClick(<span class="keyword">this</span>);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>当然满足这一切的条件时clickable要为true</p>
+</li>
+</ul>
+<h3 id="1-2-事件分发（ViewGroup）"><a href="#1-2-事件分发（ViewGroup）" class="headerlink" title="1.2 事件分发（ViewGroup）"></a>1.2 事件分发（ViewGroup）</h3><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%873.png" class title="事件分发例子">
+
+<h3 id="1-2-1-ACTION-DOWN"><a href="#1-2-1-ACTION-DOWN" class="headerlink" title="1.2.1 ACTION_DOWN"></a>1.2.1 ACTION_DOWN</h3><p>首先会清除所有标记</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">             <span class="comment">// Throw away all previous state when starting a new touch gesture.</span></span><br><span class="line">             <span class="comment">// The framework may have dropped the up or cancel event for the previous gesture</span></span><br><span class="line">             <span class="comment">// due to an app switch, ANR, or some other state change.</span></span><br><span class="line">             cancelAndClearTouchTargets(ev);</span><br><span class="line">             resetTouchState();</span><br><span class="line">         &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="1-2-1-1-拦截"><a href="#1-2-1-1-拦截" class="headerlink" title="1.2.1.1 拦截"></a>1.2.1.1 拦截</h4><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// Check for interception.</span></span><br><span class="line"><span class="keyword">final</span> <span class="keyword">boolean</span> intercepted;</span><br><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br><span class="line">        || mFirstTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">boolean</span> disallowIntercept = (mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">if</span> (!disallowIntercept) &#123;</span><br><span class="line">        intercepted = onInterceptTouchEvent(ev);</span><br><span class="line">        ev.setAction(action); <span class="comment">// restore action in case it was changed</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        intercepted = <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// There are no touch targets and this action is not an initial down</span></span><br><span class="line">    <span class="comment">// so this view group continues to intercept touches.</span></span><br><span class="line">    intercepted = <span class="keyword">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    可以看到intercepted被赋值为onInterceptTouchEvent(ev)的返回值。</p>
+<p>​    如果被拦截，则intercepted为true</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canceled &amp;&amp; !intercepted)</span><br></pre></td></tr></table></figure>
+
+<p>​    无法进入这个if语句，去进行与分发相关的操作。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mFirstTouchTarget == <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="comment">// No touch targets so treat this as an ordinary view.</span></span><br><span class="line">    handled = dispatchTransformedTouchEvent(ev, canceled, <span class="keyword">null</span>,</span><br><span class="line">            TouchTarget.ALL_POINTER_IDS);</span><br></pre></td></tr></table></figure>
+
+<p>​    在这一个if语句里进行事件的分发或者处理，进入dispatchTransformedTouchEvent方法。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (child == <span class="keyword">null</span>) &#123;</span><br><span class="line">    handled = <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    handled = child.dispatchTouchEvent(event);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    在dispatchTransformedTouchEvent里可以看到，因为调用时child此参数传入为null，所以直接调用父类View的dispatchTouchEvent方法，去处理这个事件，即这个事件被拦截在这个ViewGroup。</p>
+<h4 id="1-2-1-2-不拦截"><a href="#1-2-1-2-不拦截" class="headerlink" title="1.2.1.2 不拦截"></a>1.2.1.2 不拦截</h4><p>​    如果不拦截，则intercepted为false。</p>
+<p>​    进入第二个if语句。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br></pre></td></tr></table></figure>
+
+<p>如果为ACTION_DOWN就进入这个if语句</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (newTouchTarget == <span class="keyword">null</span> &amp;&amp; childrenCount != <span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> ArrayList&lt;View&gt; preorderedList = buildTouchDispatchChildList()</span><br></pre></td></tr></table></figure>
+
+<p>​    进入这个if语句，并且通过buildTouchDispatchChildList()方法构造一个数组用于存放ViewGroup中的View，并且写在上面的view会放在数组后面，拿也是从数组后面开始拿。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="keyword">int</span> i = childrenCount - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--)</span><br></pre></td></tr></table></figure>
+
+<p>​    进入for循环，遍历当前ViewGroup的所有子View。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canViewReceivePointerEvents(child)</span><br><span class="line">        || !isTransformedTouchPointInView(x, y, child, <span class="keyword">null</span>)) &#123;</span><br><span class="line">    ev.setTargetAccessibilityFocus(<span class="keyword">false</span>);</span><br><span class="line">    <span class="keyword">continue</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>两个条件：</p>
+<ul>
+<li><pre><code class="java"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">canViewReceivePointerEvents</span><span class="params">(@NonNull View child)</span> </span>{
+    <span class="keyword">return</span> (child.mViewFlags &amp; VISIBILITY_MASK) == VISIBLE
+            || child.getAnimation() != <span class="keyword">null</span>;
+}
+&lt;!--￼<span class="number">15</span>--&gt;
+
+这个表示点击区域是否是View所在的区域。
+</code></pre>
+</li>
+</ul>
+<p>如果满足其中任意一个，就continue，直接遍历到下一个child。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (newTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="comment">// Child is already receiving touch within its bounds.</span></span><br><span class="line">    <span class="comment">// Give it the new pointer in addition to the ones it is handling.</span></span><br><span class="line">    newTouchTarget.pointerIdBits |= idBitsToAssign;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果newTouchTarget不为null，就直接结束循环。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, <span class="keyword">false</span>, child, idBitsToAssign)) &#123;</span><br><span class="line">    <span class="comment">// Child wants to receive touch within its bounds.</span></span><br><span class="line">    mLastTouchDownTime = ev.getDownTime();</span><br><span class="line">    <span class="keyword">if</span> (preorderedList != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="comment">// childIndex points into presorted list, find original index</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; childrenCount; j++) &#123;</span><br><span class="line">            <span class="keyword">if</span> (children[childIndex] == mChildren[j]) &#123;</span><br><span class="line">                mLastTouchDownIndex = j;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mLastTouchDownIndex = childIndex;</span><br><span class="line">    &#125;</span><br><span class="line">    mLastTouchDownX = ev.getX();</span><br><span class="line">    mLastTouchDownY = ev.getY();</span><br><span class="line">    <span class="comment">//参数赋值</span></span><br><span class="line">    newTouchTarget = addTouchTarget(child, idBitsToAssign);</span><br><span class="line">    alreadyDispatchedToNewTouchTarget = <span class="keyword">true</span>;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    在这里可以看到，如果dispatchTransformedTouchEvent(ev, false, child, idBitsToAssign)返回true，则进入对一些参数进行赋值并且结束循环，如果为false，则继续进行下去开始下一次循环。</p>
+<p>​    <strong>在dispatchTransformedTouchEvent方法中，此时child不为null，所以调用child的dispatchTouchEvent方法，即肯定是ViewGroup的。</strong></p>
+<p>​    进行完参数赋值之后，newTouchTarget == mFirstTouchTarget，target.next==null，    alreadyDispatchedToNewTouchTarget = true。</p>
+<ul>
+<li><p>在这个if语句中，如果返回值一直为false，即所有子View都不处理事件，则和拦截的情况没有区别，全部交给当前ViewGroup处理。</p>
+</li>
+<li><p>如果返回值有true，则带着变化的参数进入第三个if语句</p>
+<ul>
+<li><p>将进入else</p>
+</li>
+<li><pre><code class="java"><span class="keyword">while</span> (target != <span class="keyword">null</span>) {
+    <span class="keyword">final</span> TouchTarget next = target.next;
+    <span class="keyword">if</span> (alreadyDispatchedToNewTouchTarget &amp;&amp; target == newTouchTarget) {
+        handled = <span class="keyword">true</span>;
+    } <span class="keyword">else</span> {
+        <span class="keyword">final</span> <span class="keyword">boolean</span> cancelChild = resetCancelNextUpFlag(target.child)
+                || intercepted;
+        <span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, cancelChild,
+                target.child, target.pointerIdBits)) {
+            handled = <span class="keyword">true</span>;
+        }
+        <span class="keyword">if</span> (cancelChild) {
+            <span class="keyword">if</span> (predecessor == <span class="keyword">null</span>) {
+                mFirstTouchTarget = next;
+            } <span class="keyword">else</span> {
+                predecessor.next = next;
+            }
+            target.recycle();
+            target = next;
+            <span class="keyword">continue</span>;
+        }
+    }
+    predecessor = target;
+    target = next;
+}
+&lt;!--￼<span class="number">18</span>--&gt;
+
+肯定为<span class="keyword">true</span>，所以handled为<span class="keyword">true</span>，函数最终返回<span class="keyword">true</span>，代表这个事件我不处理。
+
+
+</code></pre>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="1-2-2-ACTION-MOVE"><a href="#1-2-2-ACTION-MOVE" class="headerlink" title="1.2.2 ACTION_MOVE"></a>1.2.2 ACTION_MOVE</h3>]]></content>
+  </entry>
+  <entry>
     <title>插件化换肤</title>
     <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
     <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
