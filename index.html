@@ -122,16 +122,16 @@
 <h3 id="3-2-虚拟机栈"><a href="#3-2-虚拟机栈" class="headerlink" title="3.2 虚拟机栈"></a>3.2 虚拟机栈</h3><p>​    虚拟机栈是用于管理一个线程当中的方法的，每有一个方法执行，就会把封装有这个方法信息的栈帧压入虚拟机栈，执行结束后就会把对应栈帧出栈。（就类似于虚拟机栈是一个弹夹，栈帧是子弹）</p>
 <p>​    栈帧结构：</p>
 <ul>
-<li>局部变量表：用于存储八种基本变量类型。</li>
-<li>操作数栈：在函数执行过程中存放一些中间变量。</li>
-<li>动态链接：一般在java多态时，如一个接口的两个实现类，调用重写的同一个方法，用动态链接去区分调用了哪一个方法。</li>
+<li>局部变量表：用于存储八种基本变量类型</li>
+<li>操作数栈：在函数执行过程中存放一些中间变量</li>
+<li>动态链接：一般在java多态时，如一个接口的两个实现类，调用重写的同一个方法，用动态链接去区分调用了哪一个方法</li>
 <li>完成出口：用于存储函数返回值。<strong>（正常返回：程序计数器指向的地址，异常返回：通过异常处理器表确定）</strong></li>
 </ul>
 <h3 id="3-3-本地方法栈"><a href="#3-3-本地方法栈" class="headerlink" title="3.3 本地方法栈"></a>3.3 本地方法栈</h3><p>​    虚拟机栈是管理java方法，而本地方法栈是管理native方法，当JVM调用到native方法时，不会将其打包成栈帧入虚拟机栈，而是利用动态链接将其交给操作系统执行。</p>
 <p>​    <strong>HotSpot直接把本地方法栈和虚拟机栈合二为一</strong></p>
 <h3 id="3-4-方法区"><a href="#3-4-方法区" class="headerlink" title="3.4 方法区"></a>3.4 方法区</h3><p>​    方法区存储<strong>常量、静态变量、类信息、即时编译期编译后的内容</strong>。</p>
 <p>​    java1.8之后，运行时常量池中的<strong>字符串</strong>都被放入堆区。</p>
-<p>​    Java1.8以前：利用永久代实现方法区。</p>
+<p>​    Java1.8以前：永久代是方法区的一种实现。</p>
 <p>​    java1.8以后：用元空间代替永久代。</p>
 <ul>
 <li><p>缺点：容易发生内存溢出，因为GC时回收率偏低，效率低。</p>
@@ -145,10 +145,10 @@
 
 <p>JVM处理过程如下：</p>
 <ul>
-<li>JVM 向操作系统申请内存，JVM 第一步就是通过配置参数或者默认配置参数向操作系统申请内存空间。</li>
-<li>JVM 获得内存空间后，会根据配置参数分配堆、栈以及方法区的内存大小。</li>
-<li>完成上一个步骤后， JVM 首先会执行构造器，编译器会在.java 文件被编译成.class 文件时，收集所有类的初始化代码，包括静态变量赋值语句、静态代码块、静态方法，静态变量和常量放入方法区。</li>
-<li>执行方法。启动 main 线程，执行 main 方法，开始执行第一行代码。此时堆内存中会创建一个 Teacher 对象，对象引用 student 就存放在栈中。执行其他方法时，具体的操作：栈帧执行对内存区域的影响。</li>
+<li>JVM 向操作系统申请内存，JVM 第一步就是通过配置参数或者默认配置参数向操作系统申请内存空间</li>
+<li>JVM 获得内存空间后，会根据配置参数分配堆、栈以及方法区的内存大小</li>
+<li>完成上一个步骤后， JVM 首先会执行构造器，编译器会在.java 文件被编译成.class 文件时，收集所有类的初始化代码，包括静态变量赋值语句、静态代码块、静态方法，静态变量和常量放入方法区</li>
+<li>执行方法。启动 main 线程，执行 main 方法，开始执行第一行代码。此时堆内存中会创建一个 Teacher 对象，对象引用 student 就存放在栈中。执行其他方法时，具体的操作：栈帧执行对内存区域的影响</li>
 </ul>
 <img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E8%BF%87%E7%A8%8B.png" class title="运行过程">
 
@@ -156,39 +156,134 @@
 
 <p><strong>堆中的内存分配是连续的，且栈内存远小于堆内存。</strong></p>
 <h2 id="6-内存溢出"><a href="#6-内存溢出" class="headerlink" title="6. 内存溢出"></a>6. 内存溢出</h2><h3 id="6-1-栈溢出"><a href="#6-1-栈溢出" class="headerlink" title="6.1 栈溢出"></a>6.1 栈溢出</h3><ul>
-<li>stackOverFlow：当栈帧数量过多，加起来大于虚拟机栈的1M内存空间时，报stackOverFlow。</li>
+<li>stackOverFlow：当栈帧数量过多，加起来大于虚拟机栈的1M内存空间时，报stackOverFlow</li>
 <li>outOfMemory：当线程数量过多，虚拟机栈数量就过多，加起来大于操作系统分配空间时，报OOM。</li>
 </ul>
 <h3 id="6-2-方法区溢出"><a href="#6-2-方法区溢出" class="headerlink" title="6.2 方法区溢出"></a>6.2 方法区溢出</h3><ul>
 <li>运行时常量池溢出</li>
 <li>方法区中保存的Class对象没有被及时回收掉或者Class信息占用的内存超过了我们配置。</li>
 </ul>
-<p>两者都为OOM。</p>
+<p>两者都为OOM</p>
 <p><strong><em>注意Class要被回收，条件比较苛刻（仅仅是可以，不代表必然，因为还有一些参数可以进行控制）：</em></strong></p>
 <ul>
-<li><p>该类所有的实例都已经被回收，也就是堆中不存在该类的任何实例。</p>
+<li><p>该类所有的实例都已经被回收，也就是堆中不存在该类的任何实例</p>
 </li>
-<li><p>加载该类的ClassLoader已经被回收。</p>
+<li><p>加载该类的ClassLoader已经被回收</p>
 </li>
-<li><p>该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法。</p>
+<li><p>该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法</p>
 </li>
 </ul>
 <h3 id="6-3-堆溢出"><a href="#6-3-堆溢出" class="headerlink" title="6.3 堆溢出"></a>6.3 堆溢出</h3><p>​    当创建对象大小大于堆内存空间，或者创建对象过多，且都为存活对象时，报OOM。</p>
 <h3 id="6-4-本地内存溢出"><a href="#6-4-本地内存溢出" class="headerlink" title="6.4 本地内存溢出"></a>6.4 本地内存溢出</h3><p>​    使用NIO时使用大小超过本地内存，也为OOM。</p>
 <h2 id="7-虚拟机优化技术"><a href="#7-虚拟机优化技术" class="headerlink" title="7. 虚拟机优化技术"></a>7. 虚拟机优化技术</h2><ul>
-<li><p>编译优化——内联函数：将传入参数已经确定的函数直接拆开放入调用位置，避免真实的方法调用。</p>
+<li><p>编译优化——内联函数：将传入参数已经确定的函数直接拆开放入调用位置，避免真实的方法调用</p>
 <img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E8%81%94%E5%87%BD%E6%95%B0.png" class title="内联函数">
 </li>
-<li><p>栈优化——栈帧之间的数据共享：调用方的操作数栈和被调用方的局部变量表共享，减小操作空间的同时也减少了一些复制操作。</p>
+<li><p>栈优化——栈帧之间的数据共享：调用方的操作数栈和被调用方的局部变量表共享，减小操作空间的同时也减少了一些复制操作</p>
 <img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%A0%88%E4%BC%98%E5%8C%96.png" class title="栈优化">
 
+</li>
+</ul>
+<h1 id="二、虚拟机中的对象"><a href="#二、虚拟机中的对象" class="headerlink" title="二、虚拟机中的对象"></a>二、虚拟机中的对象</h1><h2 id="1-对象分配"><a href="#1-对象分配" class="headerlink" title="1. 对象分配"></a>1. 对象分配</h2><ul>
+<li>首先通过类加载，传入JVM</li>
+<li>JVM进行对象检查，检查对象是否已经被类加载器加载完毕，如果未加载完毕，就返回到类加载器处重新加载</li>
+<li>检查通过后，就开始内存分配</li>
+<li>内存空间初始化</li>
+<li>设置（设置对象的对象头的一些参数）</li>
+<li>对象初始化（构造函数执行）</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA.png" class title="对象创建">
+
+
+
+<h3 id="1-1-对象的内存布局"><a href="#1-1-对象的内存布局" class="headerlink" title="1.1 对象的内存布局"></a>1.1 对象的内存布局</h3><ul>
+<li>对象头：对象头包含了<strong>Mark Word 、类型指针、对象数组长度</strong>这三个部分。（其中数组长度只有在是数组对象时才会存在）</li>
+<li>实例数据</li>
+<li>对齐填充：作用为将对象大小补齐为字节的倍数，如对象头和实例数据加起来为30位，就需要对齐填充2位</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80.png" class title="对象内存布局">
+
+
+
+<h3 id="1-2-内存分配"><a href="#1-2-内存分配" class="headerlink" title="1.2 内存分配"></a>1.2 内存分配</h3><ul>
+<li><p>划分内存的方法：如堆中内存空间整齐，采用指针碰撞（指针依次向后移动），如不整齐，采用空闲列表，记录每个位置是否已经存放对象</p>
+</li>
+<li><p>并发安全：<strong>CAS机制</strong>，如果有线程在访问，就自旋等待，再次访问时如访问位置不为空闲，就去访问下一个位置。或者采用<strong>本地线程缓存（TLAB）</strong>，在Eden区中划分一个内存大小为Eden百分之一的TLAB区，把每个线程对应的对象数据放入TLAB区，类似于ThreadLocal</p>
+</li>
+<li><p>堆中内存区域：</p>
+<ul>
+<li>新生代：占堆的三分之一大小，又细分为Eden，From，To三个区，内存比例为8：1：1，因为经过大数据调查显示，对象进入Eden区第一次GC，百分之九十都会被回收，而为了避免From或者To内存溢出，只有一半是有效内存</li>
+<li>老年代：占堆的三分之二大小</li>
+<li>新生代和老年代有着各自的垃圾回收器，新生代为Minor GC，老年代为Full GC</li>
+</ul>
+</li>
+<li><p>具体内存分配过程：</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D.png" class title="内存分配">
+
+<p>(1)优先进行逃逸分析，判断对象是否可以在栈中分配（如对象只存在于一个方法体中，没有其他方法调用，没有其他线程调用，就可以分配在栈中，因为对象会随着栈帧的出栈而回收）。</p>
+<p>(2)无法分配到栈中的对象就送入堆中，如果为大对象，直接存入老年代,如果不为大对象，但是采用了本地线程缓存，就存入TLAB区，如果都不满足，就存入Eden区的其余位置。</p>
+<p>(3)放入Eden区中的对象，在GC时，没有被回收的对象将会放入From区，再次GC还未被回收的对象就送入To区，一直来回存放，目的是避免From区和To区内存溢出，每进行一次GC，就把未回收的对象放入空的区中，将不为空的区全部回收，下一次继续进行这样的操作。存活的对象每进行一次位置转移，就把对象头中的age信息加一，age为四位，最大为15，所以在15次GC后要是对象还存活，就放入老年代。但是有一个例外，JVM为了防止From区和To区内存不足，如果GC时几个对象加起来大小很大，就直接放入老年代，无需等到age达到15，这个称为<strong>对象动态年龄判定</strong>。</p>
+<p>(4)为了保证老年代内存空间不溢出，JVM会在每一次有对象进入老年代时进行一次老年代GC，但是这样做很消耗内存，所以有一个<strong>空间分配担保</strong>，对象放入老年代时先不进行垃圾回收，如果老年代内存不够用了，再进行垃圾回收。</p>
+</li>
+<li><p>内存分配的规则</p>
+<ul>
+<li>对象优先在Eden区分配</li>
+<li>大对象直接分配到老年代</li>
+<li>空间分配担保</li>
+<li>长期存活对象进入老年代</li>
+<li>对象年龄动态判定</li>
+</ul>
+</li>
+<li><p>优化： 本地线程缓冲（TLAB）</p>
+</li>
+</ul>
+<h3 id="1-3-内存空间初始化"><a href="#1-3-内存空间初始化" class="headerlink" title="1.3 内存空间初始化"></a>1.3 内存空间初始化</h3><p>​    内存分配完成后，虚拟机需要将分配到的内存空间都初始化为零值(如int值为0，boolean值为false等等)。这一步操作保证了对象的实例字段在Java代码中可以不赋初始值就直接使用，程序能访问到这些字段的数据类型所对应的零值。</p>
+<h2 id="2-对象访问定位"><a href="#2-对象访问定位" class="headerlink" title="2. 对象访问定位"></a>2. 对象访问定位</h2><ul>
+<li><p>句柄访问：每个对象的引用持有一个句柄，句柄中存放了到对象实例数据、对象类型数据的指针</p>
+</li>
+<li><p>直接指针访问：每个对象的的引用直接持有对象实例数据，还有对象类型指针</p>
+</li>
+<li><p>对比：</p>
+<p>优点：句柄访问可以在对象实例位置发生改变时不用重新分配引用的指针，直接指针访问可以只进行一次指针访问，速度快，效率高。</p>
+<p>缺点：句柄访问要进行两次指针访问，效率低，速度慢，直接指针访问在对象实例位置发生改变时需要重新定位。</p>
+</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E8%AE%BF%E9%97%AE%E5%AE%9A%E4%BD%8D.png" class title="对象访问定位">
+
+
+
+<h2 id="3-对象存活判断"><a href="#3-对象存活判断" class="headerlink" title="3. 对象存活判断"></a>3. 对象存活判断</h2><ul>
+<li>引用计数算法（无法解决对象互相引用的问题）：JVM维护一个变量，每创建一个对象就加一，回收一个就减一，直到为0就是全部回收完毕</li>
+<li>可达性分析：JVM将一些特别的对象（静态变量、常量池、虚拟机栈中引用的对象、JNI指针等等），定义为GC Root，当持有引用时就建立了关联，只要对象到GC Root之间有一条有关联的道路，就判断为对象存活</li>
+<li>但是不是经历了可达性分析不存活的对象就一定会被回收，在第一次可达性分析要被回收后，会进行一次筛选，如果类内部重写了finalized方法，就会执行一次此方法，可以在这个方法中自行救活对象，但是第二次回收就会直接回收。<strong>注意：finalized方法优先级很低，所以不建议使用</strong></li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%AD%98%E6%B4%BB.png" class title="对象存活">
+
+
+
+<h2 id="4-各种引用"><a href="#4-各种引用" class="headerlink" title="4. 各种引用"></a>4. 各种引用</h2><ul>
+<li><p>强引用：用 = 创建的对象，无论如何都不会被回收</p>
+</li>
+<li><p>软引用（softReference）：在JVM发生OOM时GC才会被回收</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-1.png" class title="软引用-1">
+
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-2.png" class title="软引用-2">
+</li>
+<li><p>弱引用（WeakReference）：在GC时就会回收</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-1.png" class title="弱引用-1">
+
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-2.png" class title="弱引用-2">
+</li>
+<li><p>虚引用：随时都会被回收，唯一作用就是监视垃圾回收器是否正常运行</p>
+</li>
+<li><p><strong><em>注意：</em></strong>软引用和弱引用，可以用在内存资源紧张的情况下以及创建不是很重要的数据缓存。当系统内存不足的时候，缓存中的内容是可以被释放（比如图片缓存）。实际运用（WeakHashMap、ThreadLocal）</p>
 </li>
 </ul>
 
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="cketebtij0003t0vb92gidc48" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="ckewhbma90002povbgu8bg3y9" class="article-share-link">Share</a>
       
       
     </footer>
@@ -224,7 +319,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/" data-id="cketebtgw0001t0vb7f111t32" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/" data-id="ckewhbma20001povb2p5d0mbr" class="article-share-link">Share</a>
       
       
     </footer>
@@ -434,7 +529,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/" data-id="cketebtj80006t0vb73oy3d4a" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/" data-id="ckewhbmb60007povb3zgz7ck1" class="article-share-link">Share</a>
       
       
     </footer>
@@ -470,7 +565,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/" data-id="cketebtil0004t0vb8kpk4rfs" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/" data-id="ckewhbmaa0004povb0s32ddxx" class="article-share-link">Share</a>
       
       
     </footer>
@@ -583,7 +678,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/" data-id="cketebthc0002t0vbgn29giku" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/" data-id="ckewhbmb80009povbez8jf63x" class="article-share-link">Share</a>
       
       
     </footer>
@@ -717,7 +812,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" data-id="cketebtja0008t0vb5r386xqh" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" data-id="ckewhbmb70008povb2gao17jt" class="article-share-link">Share</a>
       
       
     </footer>
