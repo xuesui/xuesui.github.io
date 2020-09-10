@@ -199,9 +199,86 @@
 ]]></content>
   </entry>
   <entry>
-    <title>插件化换肤</title>
-    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
-    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
+    <title>View的创建流程</title>
+    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
+    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
+
+<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
+<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
+</li>
+<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
+</li>
+<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
+</li>
+<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
+<ul>
+<li><p>r.mPendingRemoveWindow = r.window</p>
+</li>
+<li><p>r.window = r.activity.getWindow()</p>
+</li>
+<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
+</li>
+<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
+        <span class="keyword">return</span> mWindow;
+    }
+&lt;!--￼<span class="number">0</span>--&gt;
+</code></pre>
+</li>
+</ul>
+<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
+</li>
+<li><p>此时的结构：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
+</li>
+<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
+</li>
+</ul>
+<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
+<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
+</li>
+<li><p>installDecor()，对decor进行一系列操作</p>
+<ul>
+<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
+</li>
+<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
+</li>
+<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
+<ul>
+<li>layoutResource就是传入的布局文件</li>
+<li>mLayoutInflater为布局加载器</li>
+<li>final View root = inflater.inflate(layoutResource, null)</li>
+<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
+<li>通过前两步把布局文件加载为View并且添加进去</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
+</li>
+</ul>
+</li>
+<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
+<ul>
+<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
+<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
+<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
+</ul>
+</li>
+<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
+<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
+</li>
+<li><p>关于inflate的attachToRoot参数的解析</p>
+<ul>
+<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
+<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
+<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
+</ul>
+</li>
+</ul>
+]]></content>
   </entry>
   <entry>
     <title>事件分发二级联动</title>
@@ -486,85 +563,8 @@
 ]]></content>
   </entry>
   <entry>
-    <title>View的创建流程</title>
-    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
-    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
-
-<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
-<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
-</li>
-<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
-</li>
-<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
-</li>
-<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
-<ul>
-<li><p>r.mPendingRemoveWindow = r.window</p>
-</li>
-<li><p>r.window = r.activity.getWindow()</p>
-</li>
-<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
-</li>
-<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
-        <span class="keyword">return</span> mWindow;
-    }
-&lt;!--￼<span class="number">0</span>--&gt;
-</code></pre>
-</li>
-</ul>
-<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
-</li>
-<li><p>此时的结构：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
-</li>
-<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
-</li>
-</ul>
-<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
-<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
-</li>
-<li><p>installDecor()，对decor进行一系列操作</p>
-<ul>
-<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
-</li>
-<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
-</li>
-<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
-<ul>
-<li>layoutResource就是传入的布局文件</li>
-<li>mLayoutInflater为布局加载器</li>
-<li>final View root = inflater.inflate(layoutResource, null)</li>
-<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
-<li>通过前两步把布局文件加载为View并且添加进去</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
-</li>
-</ul>
-</li>
-<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
-<ul>
-<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
-<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
-<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
-</ul>
-</li>
-<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
-<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
-</li>
-<li><p>关于inflate的attachToRoot参数的解析</p>
-<ul>
-<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
-<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
-<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
-</ul>
-</li>
-</ul>
-]]></content>
+    <title>插件化换肤</title>
+    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
+    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
   </entry>
 </search>
