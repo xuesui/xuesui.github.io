@@ -223,7 +223,7 @@
 <p>(1)优先进行逃逸分析，判断对象是否可以在栈中分配（如对象只存在于一个方法体中，没有其他方法调用，没有其他线程调用，就可以分配在栈中，因为对象会随着栈帧的出栈而回收）。</p>
 <p>(2)无法分配到栈中的对象就送入堆中，如果为大对象，直接存入老年代,如果不为大对象，但是采用了本地线程缓存，就存入TLAB区，如果都不满足，就存入Eden区的其余位置。</p>
 <p>(3)放入Eden区中的对象，在GC时，没有被回收的对象将会放入From区，再次GC还未被回收的对象就送入To区，一直来回存放，目的是避免From区和To区内存溢出，每进行一次GC，就把未回收的对象放入空的区中，将不为空的区全部回收，下一次继续进行这样的操作。存活的对象每进行一次位置转移，就把对象头中的age信息加一，age为四位，最大为15，所以在15次GC后要是对象还存活，就放入老年代。但是有一个例外，JVM为了防止From区和To区内存不足，如果GC时几个对象加起来大小很大，就直接放入老年代，无需等到age达到15，这个称为<strong>对象动态年龄判定</strong>。</p>
-<p>(4)为了保证老年代内存空间不溢出，JVM会在每一次有对象进入老年代时进行一次老年代GC，但是这样做很消耗内存，所以有一个<strong>空间分配担保</strong>，对象放入老年代时先不进行垃圾回收，如果老年代内存不够用了，再进行垃圾回收。</p>
+<p>(4)为了保证老年代内存空间不溢出，JVM会在每一次有对象进入老年代时进行一次老年代GC，但是这样做很消耗内存，所以有一个<strong>空间分配担保</strong>，对象放入老年代时先不进行垃圾回收，如果老年代内存不够用了，再进行垃圾回收。还有一种<strong>空间分配担保</strong>，就是当From或者To区放不下时，让对象直接进入老年区。</p>
 </li>
 <li><p>内存分配的规则</p>
 <ul>
@@ -283,7 +283,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="ckewnd9eg0003n0vbaatn5901" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="ckewnzdw60004xsvbguiwa95r" class="article-share-link">Share</a>
       
       
     </footer>
@@ -319,7 +319,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/" data-id="ckewnd9ec0001n0vb2fpi5mdc" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/" data-id="ckewnzdw20001xsvb00qg8zzw" class="article-share-link">Share</a>
       
       
     </footer>
@@ -529,7 +529,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/" data-id="ckewnd9el0007n0vb1r1kdyzd" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/" data-id="ckewnzdw70005xsvbfzs54soe" class="article-share-link">Share</a>
       
       
     </footer>
@@ -565,7 +565,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/" data-id="ckewnd9en0009n0vb2kvifoyh" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/" data-id="ckewnzdw80006xsvbfjr7a9gx" class="article-share-link">Share</a>
       
       
     </footer>
@@ -678,7 +678,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/" data-id="ckewnd9ei0005n0vbc34y4le2" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/" data-id="ckewnzdw50003xsvb4fwa3xcf" class="article-share-link">Share</a>
       
       
     </footer>
@@ -812,7 +812,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" data-id="ckewnd9em0008n0vbd8z03c93" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/" data-id="ckewnzdw90007xsvb3v8v3be0" class="article-share-link">Share</a>
       
       
     </footer>
