@@ -6,88 +6,6 @@
     <content><![CDATA[]]></content>
   </entry>
   <entry>
-    <title>View的创建流程</title>
-    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
-    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
-
-<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
-<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
-</li>
-<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
-</li>
-<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
-</li>
-<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
-<ul>
-<li><p>r.mPendingRemoveWindow = r.window</p>
-</li>
-<li><p>r.window = r.activity.getWindow()</p>
-</li>
-<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
-</li>
-<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
-        <span class="keyword">return</span> mWindow;
-    }
-&lt;!--￼<span class="number">0</span>--&gt;
-</code></pre>
-</li>
-</ul>
-<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
-</li>
-<li><p>此时的结构：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
-</li>
-<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
-</li>
-</ul>
-<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
-<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
-</li>
-<li><p>installDecor()，对decor进行一系列操作</p>
-<ul>
-<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
-</li>
-<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
-</li>
-<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
-<ul>
-<li>layoutResource就是传入的布局文件</li>
-<li>mLayoutInflater为布局加载器</li>
-<li>final View root = inflater.inflate(layoutResource, null)</li>
-<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
-<li>通过前两步把布局文件加载为View并且添加进去</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
-</li>
-</ul>
-</li>
-<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
-<ul>
-<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
-<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
-<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
-</ul>
-</li>
-<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
-<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
-</li>
-<li><p>关于inflate的attachToRoot参数的解析</p>
-<ul>
-<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
-<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
-<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
-</ul>
-</li>
-</ul>
-]]></content>
-  </entry>
-  <entry>
     <title>java虚拟机</title>
     <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
     <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
@@ -278,6 +196,403 @@
 <li><p><strong><em>注意：</em></strong>软引用和弱引用，可以用在内存资源紧张的情况下以及创建不是很重要的数据缓存。当系统内存不足的时候，缓存中的内容是可以被释放（比如图片缓存）。实际运用（WeakHashMap、ThreadLocal）</p>
 </li>
 </ul>
+<h1 id="三、-垃圾回收器"><a href="#三、-垃圾回收器" class="headerlink" title="三、 垃圾回收器"></a>三、 垃圾回收器</h1><h2 id="1-垃圾回收算法"><a href="#1-垃圾回收算法" class="headerlink" title="1.垃圾回收算法"></a>1.垃圾回收算法</h2><h3 id="1-1-复制算法（Copying）"><a href="#1-1-复制算法（Copying）" class="headerlink" title="1.1 复制算法（Copying）"></a>1.1 复制算法（Copying）</h3><p>​    将可用内存按容量划分为大小相等的两块，每次只使用其中的一块。当这一块的内存用完了，就将还存活着的对象复制到另外一块上面，然后再把已使用过的内存空间一次清理掉。这样使得每次都是对整个半区进行内存回收，内存分配时也就不用考虑内存碎片等复杂情况，只要按顺序分配内存即可，实现简单，运行高效。只是这种算法的代价是将内存缩小为了原来的一半。</p>
+<p>​    专门研究表明，新生代中的对象98%是“朝生夕死”的，所以并不需要按照1:1的比例来划分内存空间，而是将内存分为一块较大的Eden空间和两块较小的Survivor空间，每次使用Eden和其中一块Survivor[1]。当回收时，将Eden和Survivor中还存活着的对象一次性地复制到另外一块Survivor空间上，最后清理掉Eden和刚才用过的Survivor空间。（分代收集理论）</p>
+<p>​    HotSpot虚拟机默认Eden和Survivor的大小比例是8:1，也就是每次新生代中可用内存空间为整个新生代容量的90%（80%+10%），只有10%的内存会被“浪费”。当然，98%的对象可回收只是一般场景下的数据，我们没有办法保证每次回收都只有不多于10%的对象存活，当Survivor空间不够用时，需要依赖其他内存（这里指老年代）进行分配担保（Handle Promotion）</p>
+<h3 id="1-2-标记-清除算法（Mark-Sweep）"><a href="#1-2-标记-清除算法（Mark-Sweep）" class="headerlink" title="1.2 标记-清除算法（Mark-Sweep）"></a>1.2 标记-清除算法（Mark-Sweep）</h3><p>​    算法分为“标记”和“清除”两个阶段：首先标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。它的主要不足空间问题，标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程序运行过程中需要分配较大对象时，无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。</p>
+<h3 id="1-3-标记-整理算法（Mark-Compact）"><a href="#1-3-标记-整理算法（Mark-Compact）" class="headerlink" title="1.3 标记-整理算法（Mark-Compact）"></a>1.3 标记-整理算法（Mark-Compact）</h3><p>​    首先标记出所有需要回收的对象，在标记完成后，后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。标记整理算法虽然没有内存碎片，但是效率偏低。</p>
+<h2 id="2-JVM中常见的垃圾收集器"><a href="#2-JVM中常见的垃圾收集器" class="headerlink" title="2. JVM中常见的垃圾收集器"></a>2. JVM中常见的垃圾收集器</h2><h3 id="2-1-分代收集的思想"><a href="#2-1-分代收集的思想" class="headerlink" title="2.1 分代收集的思想"></a>2.1 分代收集的思想</h3><p>​    在新生代中，每次垃圾收集时都发现有大批对象死去，只有少量存活，那就选用复制算法，只需要付出少量存活对象的复制成本就可以完成收集。</p>
+<p>​    而老年代中因为对象存活率高、没有额外空间对它进行分配担保，就必须使用“标记—清理”或者“标记—整理”算法来进行回收。</p>
+<p>​    <strong>请记住下图的垃圾收集器和之间的连线关系。</strong></p>
+
+
+
+
+<table>
+<thead>
+<tr>
+<th align="center"><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Serial</td>
+<td>新生代，复制算法</td>
+<td>单线程</td>
+<td></td>
+<td>简单高效；适合内存不大的情况；</td>
+</tr>
+<tr>
+<td align="center">ParNew</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>ParNew垃圾收集器是Serial收集器的多线程版本</td>
+<td>搭配CMS垃圾回收器的首选</td>
+</tr>
+<tr>
+<td align="center">Parallel Scavenge吞吐量优先收集器</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>类似ParNew，更加关注吞吐量，达到一个可控制的吞吐量；</td>
+<td>本身是Server级别多CPU机器上的默认GC方式，主要适合后台运算不需要太多交互的任务；</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Serial Old</td>
+<td>老年代，标记整理算法</td>
+<td>单线程</td>
+<td></td>
+<td>Client模式下虚拟机使用</td>
+</tr>
+<tr>
+<td>Parallel Old</td>
+<td>老年代，标记整理算法</td>
+<td>并行的多线程收集器</td>
+<td>Parallel Scavenge收集器的老年代版本，为了配合Parallel Scavenge的面向吞吐量的特性而开发的对应组合；</td>
+<td>在注重吞吐量以及CPU资源敏感的场合采用</td>
+</tr>
+<tr>
+<td>CMS</td>
+<td>老年代，标记清除算法</td>
+<td>并行与并发收集器</td>
+<td>尽可能的缩短垃圾收集时用户线程停止时间；缺点在于： 1.内存碎片 2.需要更多cpu资源 3.浮动垃圾问题，需要更大的堆空间</td>
+<td>重视服务的响应速度、系统停顿时间和用户体验的互联网网站或者B/S系统。互联网后端目前cms是主流的垃圾回收器；</td>
+</tr>
+<tr>
+<td>G1</td>
+<td>跨新生代和老年代；标记整理 + 化整为零</td>
+<td>并行与并发收集器</td>
+<td>JDK1.7才正式引入，采用分区回收的思维，基本不牺牲吞吐量的前提下完成低停顿的内存回收；可预测的停顿是其最大的优势；</td>
+<td>面向服务端应用的垃圾回收器，目标为取代CMS</td>
+</tr>
+</tbody></table>
+<p>并行：垃圾收集的多线程的同时进行。</p>
+<p>并发：垃圾收集的多线程和应用的多线程同时进行。</p>
+<p>注：吞吐量=运行用户代码时间/(运行用户代码时间+ 垃圾收集时间)</p>
+<p>垃圾收集时间= 垃圾回收频率 * 单次垃圾回收时间</p>
+<h3 id="2-2-垃圾回收器工作示意图"><a href="#2-2-垃圾回收器工作示意图" class="headerlink" title="2.2 垃圾回收器工作示意图"></a>2.2 垃圾回收器工作示意图</h3><ul>
+<li><p>Serial/Serial Old</p>
+<p>最古老的，单线程，独占式，成熟，适合单CPU  服务器</p>
+<p>-XX:+UseSerialGC 新生代和老年代都用串行收集器</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+<p>-XX:+UseParallelGC 新生代使用ParallerGC，老年代使用Serial Old</p>
+</li>
+<li><p>ParNew</p>
+<p>和Serial基本没区别，唯一的区别：多线程，多CPU的，停顿时间比Serial少</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+</li>
+<li><p>Parallel Scavenge（ParallerGC）/Parallel Old</p>
+<p>​    关注吞吐量的垃圾收集器，高吞吐量则可以高效率地利用CPU时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务。</p>
+<p>​    所谓吞吐量就是CPU用于运行用户代码的时间与CPU总消耗时间的比值，即吞吐量=运行用户代码时间/（运行用户代码时间+垃圾收集时间），虚拟机总共运行了100分钟，其中垃圾收集花掉1分钟，那吞吐量就是99%。</p>
+</li>
+<li><p>Concurrent Mark Sweep （CMS）</p>
+ 
+
+<p>​    CMS收集器是一种以获取<strong>最短回收停顿时间</strong>为目标的收集器。目前很大一部分的Java应用集中在互联网站或者B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿时间最短，以给用户带来较好的体验。CMS收集器就非常符合这类应用的需求。</p>
+<p>​    从名字（包含“Mark Sweep”）上就可以看出，CMS收集器是基于<strong>“标记—清除”算法</strong>实现的，它的运作过程相对于前面几种收集器来说更复杂一些，整个过程分为4个步骤，包括：</p>
+<p><strong>l</strong> <strong><em>初始标记</em></strong>——短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快</p>
+<p><strong>l</strong> <strong><em>并发标记</em></strong>——长，和用户的应用程序同时进行，进行GC Roots追踪的过程</p>
+<p><strong>l</strong> <strong><em>重新标记</em></strong>——短暂，为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短</p>
+<p><strong>l</strong> <strong><em>并发清除</em></strong>——长，清除掉标记的对象</p>
+<p><strong>l 优点：</strong></p>
+<p>​    由于整个过程中耗时最长的并发标记和并发清除过程收集器线程都可以与用户线程一起工作，所以，从总体上来说，CMS收集器的内存回收过程是与用户线程一起并发执行的，用户体验好。</p>
+<p>-XX:+UseConcMarkSweepGC ，表示新生代使用ParNew，老年代的用CMS</p>
+<p><strong>l 缺点：</strong></p>
+<ul>
+<li><p>浮动垃圾</p>
+<p>​    由于CMS并发清理阶段用户线程还在运行着，伴随程序运行自然就还会有新的垃圾不断产生，这一部分垃圾出现在标记过程之后，CMS无法在当次收集中处理掉它们，只好留待下一次GC时再清理掉。这一部分垃圾就称为“浮动垃圾”。</p>
+<p>​    为了防止浮动垃圾导致OOM，每次在老年代内存被占了80%时就会进行GC，如果还是OOM了，就让Serial Old 进行处理，这是STW会特别多，影响用户体验。</p>
+</li>
+<li><p>内存碎片</p>
+<p>因为CMS采用的是标记——清除算法，所以会存在内存碎片，导致GC提前进行。</p>
+</li>
+<li><p>CPU敏感：CPU小于4时影响性能</p>
+</li>
+</ul>
+</li>
+<li><p>G1</p>
+  
+
+<p>-XX:+UseG1GC</p>
+<ul>
+<li><p>并发标记周期</p>
+<ul>
+<li><p>初始标记</p>
+<p>​    短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，产生一个全局停顿，都伴随有一次新生代的GC。</p>
+</li>
+<li><p>根区域扫描</p>
+<p>扫描survivor区可以直接到达的老年代区域。</p>
+</li>
+<li><p>并发标记阶段</p>
+<p>扫描和查找整个堆的存活对象，并标记。</p>
+</li>
+<li><p>重新标记</p>
+<p>会产生全局停顿，对并发标记阶段的结果进行修正。</p>
+</li>
+<li><p>独占清理</p>
+<p>会产生全局停顿，对GC回收比例进行排序，供混合收集阶段使用。</p>
+</li>
+<li><p>并发清理</p>
+<p>识别并清理完全空闲的区域，并发进行。</p>
+</li>
+</ul>
+</li>
+<li><p>并行与并发</p>
+<p>​    G1能充分利用多CPU、多核环境下的硬件优势，使用多个CPU（CPU或者CPU核心）来缩短Stop-The-World停顿的时间，部分其他收集器原本需要停顿Java线程执行的GC动作，G1收集器仍然可以通过并发的方式让Java程序继续执行。</p>
+</li>
+<li><p>分代收集</p>
+<p>​    与其他收集器一样，分代概念在G1中依然得以保留。虽然G1可以不需要其他收集器配合就能独立管理整个GC堆，但它能够采用不同的方式去处理新创建的对象和已经存活了一段时间、熬过多次GC的旧对象以获取更好的收集效果。</p>
+
+</li>
+<li><p>空间整合</p>
+<p>​    与CMS的“标记—清理”算法不同，G1从整体来看是基于“标记—整理”算法实现的收集器，从局部（两个Region之间）上来看是基于“复制”算法实现的，但无论如何，这两种算法都意味着G1运作期间不会产生内存空间碎片，收集后能提供规整的可用内存。这种特性有利于程序长时间运行，分配大对象时不会因为无法找到连续内存空间而提前触发下一次GC。</p>
+</li>
+<li><p>内存布局</p>
+<p>​    在G1之前的其他收集器进行收集的范围都是整个新生代或者老年代，而G1不再是这样。使用G1收集器时，Java堆的内存布局就与其他收集器有很大差别，它将整个Java堆划分为多个大小相等的独立区域（Region），虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔离的了，它们都是一部分Region（不需要连续）的集合。</p>
+</li>
+<li><p>混合收集</p>
+<ul>
+<li><p>对含有垃圾比例较高的Region进行回收。</p>
+</li>
+<li><p>G1当出现内存不足的的情况，也可能进行的FullGC回收。</p>
+</li>
+<li><p>G1中重要的参数：</p>
+<p>-XX:MaxGCPauseMillis 指定目标的最大停顿时间，G1尝试调整新生代和老年代的比例，堆大小，晋升年龄来达到这个目标时间。</p>
+<p>-XX:ParallerGCThreads：设置GC的工作线程数量</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-Stop-The-World现象"><a href="#3-Stop-The-World现象" class="headerlink" title="3. Stop The World现象"></a>3. Stop The World现象</h2><p>STW就是暂停用户线程。</p>
+<p>GC收集器和我们GC调优的目标就是尽可能的减少STW的时间和次数。</p>
+<h2 id="4-未来的垃圾回收"><a href="#4-未来的垃圾回收" class="headerlink" title="4. 未来的垃圾回收"></a>4. 未来的垃圾回收</h2><p>​    ZGC通过技术手段把stw的情况控制在仅有一次，就是第一次的初始标记才会发生，这样也就不难理解为什么GC停顿时间不随着堆增大而上升了，再大我也是通过并发的时间去回收了。</p>
+<p>​    关键技术：</p>
+<p>​    <strong>1.</strong> <strong><em>有色指针（Colored Pointers）</em></strong></p>
+<p>​    <strong>2.</strong> <strong><em>加载屏障（Load Barrier）</em></strong></p>
+<h2 id="5-常量池与String"><a href="#5-常量池与String" class="headerlink" title="5. 常量池与String"></a>5. 常量池与String</h2><p>​    常量池有很多概念，包括运行时常量池、class常量池、字符串常量池。</p>
+<p>​    虚拟机规范只规定以上区域属于方法区，并没有规定虚拟机厂商的实现。</p>
+<p>​    严格来说是静态常量池和运行时常量池，静态常量池是存放字符串字面量、符号引用以及类和方法的信息，而运行时常量池存放的是运行时一些直接引用。<br>​    运行时常量池是在类加载完成之后，将静态常量池中的符号引用值转存到运行时常量池中，类在解析之后，将符号引用替换成直接引用。<br>​    这两个常量池在JDK1.7版本之后，就移到堆内存中了，这里指的是物理空间，而逻辑上还是属于方法区（方法区是逻辑分区）。</p>
+<ul>
+<li><p>字面量</p>
+<p>给基本类型变量赋值的方式就叫做字面量或者字面值。</p>
+<p>比如：int i=120; long j=10L;</p>
+</li>
+<li><p>符号引用</p>
+<p>​    包括类和方法的全限定名（例如 String 这个类，它的全限定名就是 Java/lang/String）、字段的名称和描述符以及方法的名称和描述符。</p>
+</li>
+<li><p>直接引用</p>
+<p>具体对象的索引值。</p>
+</li>
+<li><p>String的初始赋值</p>
+ 
+
+<pre><code>而如果调用了insern方法，就是直接在字符串常量池中找字符串，如果没有再创建，返回的是字符串常量池的引用。</code></pre></li>
+</ul>
+<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1>]]></content>
+  </entry>
+  <entry>
+    <title>插件化换肤</title>
+    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
+    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
+  </entry>
+  <entry>
+    <title>View的创建流程</title>
+    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
+    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
+
+<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
+<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
+</li>
+<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
+</li>
+<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
+</li>
+<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
+<ul>
+<li><p>r.mPendingRemoveWindow = r.window</p>
+</li>
+<li><p>r.window = r.activity.getWindow()</p>
+</li>
+<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
+</li>
+<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
+        <span class="keyword">return</span> mWindow;
+    }
+&lt;!--￼<span class="number">0</span>--&gt;
+</code></pre>
+</li>
+</ul>
+<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
+</li>
+<li><p>此时的结构：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
+</li>
+<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
+</li>
+</ul>
+<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
+<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
+</li>
+<li><p>installDecor()，对decor进行一系列操作</p>
+<ul>
+<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
+</li>
+<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
+</li>
+<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
+<ul>
+<li>layoutResource就是传入的布局文件</li>
+<li>mLayoutInflater为布局加载器</li>
+<li>final View root = inflater.inflate(layoutResource, null)</li>
+<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
+<li>通过前两步把布局文件加载为View并且添加进去</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
+</li>
+</ul>
+</li>
+<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
+<ul>
+<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
+<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
+<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
+</ul>
+</li>
+<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
+<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
+</li>
+<li><p>关于inflate的attachToRoot参数的解析</p>
+<ul>
+<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
+<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
+<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
+</ul>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
+    <title>自定义View</title>
+    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
+    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
+<ul>
+<li>布局：onMeasure , onLayout</li>
+<li>绘制: onDraw</li>
+<li>事件分发：onTouchEvent</li>
+</ul>
+<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
+<li>View类型：实现OnMeasure和OnDraw</li>
+<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
+</ul>
+<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
+<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
+<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
+<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
+</ol>
+<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
+<li><p>Android坐标系</p>
+<p>(1)以左上角为坐标原点</p>
+<p>(2)向右为x轴正方向，向下为y轴正方向</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
+</li>
+<li><p>View位置坐标系</p>
+<ul>
+<li><p>Top：子View上边界到父view上边界的距离</p>
+</li>
+<li><p>Left：子View左边界到父view左边界的距离</p>
+</li>
+<li><p>Bottom：子View下边距到父View上边界的距离</p>
+</li>
+<li><p>Right：子View右边界到父view左边界的距离</p>
+</li>
+</ul>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
+</li>
+<li><p>获取位置的方法</p>
+<ul>
+<li>调用get方法获取相对于父View的距离</li>
+<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
+</ul>
+</li>
+</ul>
+<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
+
+<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
+
+
+
+<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
+<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
+</li>
+<li><p>其中mode类型包括：</p>
+<ul>
+<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
+<li>EXACTLY：确切的大小，如：100dp</li>
+<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
+</ul>
+</li>
+</ul>
+<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
+<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
+<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
+<ul>
+<li><p>原理</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
+
+
+
+</li>
+</ul>
+<p>  通俗易懂的一个例子：</p>
+  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
+
+<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
+<li><p>先度量孩子</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<ul>
+<li><p>再度量自己</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
+
+<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
+</li>
+</ul>
+<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
+
+<p>调用layout方法进行布局</p>
+<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
+<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
+<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
 ]]></content>
   </entry>
   <entry>
@@ -457,114 +772,6 @@
 <p>​    同样的，如果滑动方向为左右，则返回true拦截事件自己处理，反之分发。</p>
 <h3 id="2-3-MOVE过程中的变化"><a href="#2-3-MOVE过程中的变化" class="headerlink" title="2.3 MOVE过程中的变化"></a>2.3 MOVE过程中的变化</h3><p>​    在DOWN事件交给了子View处理，在第一次MOVE事件时就也是交给子View处理，如果在这个时候把滑动方向转换为了左右，那么在disptachTransformTouchEvent这个方法时就会触发CANCEL事件，并且是由子View发起的，在第二次MOVE事件时，mFirstTragetView变为了null，将被拦截，交给父View处理。</p>
 <p>​    <strong>所以，如果一个View或者ViewGroup没有拿到DOWN事件，那么他一定拿不到MOVE事件，这句话只对叶子节点是正确的。</strong></p>
-]]></content>
-  </entry>
-  <entry>
-    <title>插件化换肤</title>
-    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
-    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
-  </entry>
-  <entry>
-    <title>自定义View</title>
-    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
-    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
-<ul>
-<li>布局：onMeasure , onLayout</li>
-<li>绘制: onDraw</li>
-<li>事件分发：onTouchEvent</li>
-</ul>
-<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
-<li>View类型：实现OnMeasure和OnDraw</li>
-<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
-</ul>
-<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
-<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
-<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
-<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
-</ol>
-<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
-<li><p>Android坐标系</p>
-<p>(1)以左上角为坐标原点</p>
-<p>(2)向右为x轴正方向，向下为y轴正方向</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
-</li>
-<li><p>View位置坐标系</p>
-<ul>
-<li><p>Top：子View上边界到父view上边界的距离</p>
-</li>
-<li><p>Left：子View左边界到父view左边界的距离</p>
-</li>
-<li><p>Bottom：子View下边距到父View上边界的距离</p>
-</li>
-<li><p>Right：子View右边界到父view左边界的距离</p>
-</li>
-</ul>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
-</li>
-<li><p>获取位置的方法</p>
-<ul>
-<li>调用get方法获取相对于父View的距离</li>
-<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
-</ul>
-</li>
-</ul>
-<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
-
-<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
-
-
-
-<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
-<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
-</li>
-<li><p>其中mode类型包括：</p>
-<ul>
-<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
-<li>EXACTLY：确切的大小，如：100dp</li>
-<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
-</ul>
-</li>
-</ul>
-<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
-<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
-<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
-<ul>
-<li><p>原理</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
-
-
-
-</li>
-</ul>
-<p>  通俗易懂的一个例子：</p>
-  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
-
-<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
-<li><p>先度量孩子</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
-
-
-
-</li>
-</ul>
-<ul>
-<li><p>再度量自己</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
-
-<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
-</li>
-</ul>
-<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
-
-<p>调用layout方法进行布局</p>
-<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
-<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
-<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
 ]]></content>
   </entry>
 </search>

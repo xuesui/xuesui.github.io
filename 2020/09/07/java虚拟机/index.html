@@ -29,7 +29,7 @@
 <meta property="og:image" content="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-1.png">
 <meta property="og:image" content="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-2.png">
 <meta property="article:published_time" content="2020-09-07T10:29:40.923Z">
-<meta property="article:modified_time" content="2020-09-10T10:23:36.698Z">
+<meta property="article:modified_time" content="2020-09-12T06:45:43.988Z">
 <meta property="article:author" content="xuesui">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B.png">
@@ -295,11 +295,218 @@
 <li><p><strong><em>注意：</em></strong>软引用和弱引用，可以用在内存资源紧张的情况下以及创建不是很重要的数据缓存。当系统内存不足的时候，缓存中的内容是可以被释放（比如图片缓存）。实际运用（WeakHashMap、ThreadLocal）</p>
 </li>
 </ul>
+<h1 id="三、-垃圾回收器"><a href="#三、-垃圾回收器" class="headerlink" title="三、 垃圾回收器"></a>三、 垃圾回收器</h1><h2 id="1-垃圾回收算法"><a href="#1-垃圾回收算法" class="headerlink" title="1.垃圾回收算法"></a>1.垃圾回收算法</h2><h3 id="1-1-复制算法（Copying）"><a href="#1-1-复制算法（Copying）" class="headerlink" title="1.1 复制算法（Copying）"></a>1.1 复制算法（Copying）</h3><p>​    将可用内存按容量划分为大小相等的两块，每次只使用其中的一块。当这一块的内存用完了，就将还存活着的对象复制到另外一块上面，然后再把已使用过的内存空间一次清理掉。这样使得每次都是对整个半区进行内存回收，内存分配时也就不用考虑内存碎片等复杂情况，只要按顺序分配内存即可，实现简单，运行高效。只是这种算法的代价是将内存缩小为了原来的一半。</p>
+<p>​    专门研究表明，新生代中的对象98%是“朝生夕死”的，所以并不需要按照1:1的比例来划分内存空间，而是将内存分为一块较大的Eden空间和两块较小的Survivor空间，每次使用Eden和其中一块Survivor[1]。当回收时，将Eden和Survivor中还存活着的对象一次性地复制到另外一块Survivor空间上，最后清理掉Eden和刚才用过的Survivor空间。（分代收集理论）</p>
+<p>​    HotSpot虚拟机默认Eden和Survivor的大小比例是8:1，也就是每次新生代中可用内存空间为整个新生代容量的90%（80%+10%），只有10%的内存会被“浪费”。当然，98%的对象可回收只是一般场景下的数据，我们没有办法保证每次回收都只有不多于10%的对象存活，当Survivor空间不够用时，需要依赖其他内存（这里指老年代）进行分配担保（Handle Promotion）</p>
+<h3 id="1-2-标记-清除算法（Mark-Sweep）"><a href="#1-2-标记-清除算法（Mark-Sweep）" class="headerlink" title="1.2 标记-清除算法（Mark-Sweep）"></a>1.2 标记-清除算法（Mark-Sweep）</h3><p>​    算法分为“标记”和“清除”两个阶段：首先标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。它的主要不足空间问题，标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程序运行过程中需要分配较大对象时，无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。</p>
+<h3 id="1-3-标记-整理算法（Mark-Compact）"><a href="#1-3-标记-整理算法（Mark-Compact）" class="headerlink" title="1.3 标记-整理算法（Mark-Compact）"></a>1.3 标记-整理算法（Mark-Compact）</h3><p>​    首先标记出所有需要回收的对象，在标记完成后，后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。标记整理算法虽然没有内存碎片，但是效率偏低。</p>
+<h2 id="2-JVM中常见的垃圾收集器"><a href="#2-JVM中常见的垃圾收集器" class="headerlink" title="2. JVM中常见的垃圾收集器"></a>2. JVM中常见的垃圾收集器</h2><h3 id="2-1-分代收集的思想"><a href="#2-1-分代收集的思想" class="headerlink" title="2.1 分代收集的思想"></a>2.1 分代收集的思想</h3><p>​    在新生代中，每次垃圾收集时都发现有大批对象死去，只有少量存活，那就选用复制算法，只需要付出少量存活对象的复制成本就可以完成收集。</p>
+<p>​    而老年代中因为对象存活率高、没有额外空间对它进行分配担保，就必须使用“标记—清理”或者“标记—整理”算法来进行回收。</p>
+<p>​    <strong>请记住下图的垃圾收集器和之间的连线关系。</strong></p>
 
+
+
+
+<table>
+<thead>
+<tr>
+<th align="center"><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Serial</td>
+<td>新生代，复制算法</td>
+<td>单线程</td>
+<td></td>
+<td>简单高效；适合内存不大的情况；</td>
+</tr>
+<tr>
+<td align="center">ParNew</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>ParNew垃圾收集器是Serial收集器的多线程版本</td>
+<td>搭配CMS垃圾回收器的首选</td>
+</tr>
+<tr>
+<td align="center">Parallel Scavenge吞吐量优先收集器</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>类似ParNew，更加关注吞吐量，达到一个可控制的吞吐量；</td>
+<td>本身是Server级别多CPU机器上的默认GC方式，主要适合后台运算不需要太多交互的任务；</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Serial Old</td>
+<td>老年代，标记整理算法</td>
+<td>单线程</td>
+<td></td>
+<td>Client模式下虚拟机使用</td>
+</tr>
+<tr>
+<td>Parallel Old</td>
+<td>老年代，标记整理算法</td>
+<td>并行的多线程收集器</td>
+<td>Parallel Scavenge收集器的老年代版本，为了配合Parallel Scavenge的面向吞吐量的特性而开发的对应组合；</td>
+<td>在注重吞吐量以及CPU资源敏感的场合采用</td>
+</tr>
+<tr>
+<td>CMS</td>
+<td>老年代，标记清除算法</td>
+<td>并行与并发收集器</td>
+<td>尽可能的缩短垃圾收集时用户线程停止时间；缺点在于： 1.内存碎片 2.需要更多cpu资源 3.浮动垃圾问题，需要更大的堆空间</td>
+<td>重视服务的响应速度、系统停顿时间和用户体验的互联网网站或者B/S系统。互联网后端目前cms是主流的垃圾回收器；</td>
+</tr>
+<tr>
+<td>G1</td>
+<td>跨新生代和老年代；标记整理 + 化整为零</td>
+<td>并行与并发收集器</td>
+<td>JDK1.7才正式引入，采用分区回收的思维，基本不牺牲吞吐量的前提下完成低停顿的内存回收；可预测的停顿是其最大的优势；</td>
+<td>面向服务端应用的垃圾回收器，目标为取代CMS</td>
+</tr>
+</tbody></table>
+<p>并行：垃圾收集的多线程的同时进行。</p>
+<p>并发：垃圾收集的多线程和应用的多线程同时进行。</p>
+<p>注：吞吐量=运行用户代码时间/(运行用户代码时间+ 垃圾收集时间)</p>
+<p>垃圾收集时间= 垃圾回收频率 * 单次垃圾回收时间</p>
+<h3 id="2-2-垃圾回收器工作示意图"><a href="#2-2-垃圾回收器工作示意图" class="headerlink" title="2.2 垃圾回收器工作示意图"></a>2.2 垃圾回收器工作示意图</h3><ul>
+<li><p>Serial/Serial Old</p>
+<p>最古老的，单线程，独占式，成熟，适合单CPU  服务器</p>
+<p>-XX:+UseSerialGC 新生代和老年代都用串行收集器</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+<p>-XX:+UseParallelGC 新生代使用ParallerGC，老年代使用Serial Old</p>
+</li>
+<li><p>ParNew</p>
+<p>和Serial基本没区别，唯一的区别：多线程，多CPU的，停顿时间比Serial少</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+</li>
+<li><p>Parallel Scavenge（ParallerGC）/Parallel Old</p>
+<p>​    关注吞吐量的垃圾收集器，高吞吐量则可以高效率地利用CPU时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务。</p>
+<p>​    所谓吞吐量就是CPU用于运行用户代码的时间与CPU总消耗时间的比值，即吞吐量=运行用户代码时间/（运行用户代码时间+垃圾收集时间），虚拟机总共运行了100分钟，其中垃圾收集花掉1分钟，那吞吐量就是99%。</p>
+</li>
+<li><p>Concurrent Mark Sweep （CMS）</p>
+ 
+
+<p>​    CMS收集器是一种以获取<strong>最短回收停顿时间</strong>为目标的收集器。目前很大一部分的Java应用集中在互联网站或者B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿时间最短，以给用户带来较好的体验。CMS收集器就非常符合这类应用的需求。</p>
+<p>​    从名字（包含“Mark Sweep”）上就可以看出，CMS收集器是基于<strong>“标记—清除”算法</strong>实现的，它的运作过程相对于前面几种收集器来说更复杂一些，整个过程分为4个步骤，包括：</p>
+<p><strong>l</strong> <strong><em>初始标记</em></strong>——短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快</p>
+<p><strong>l</strong> <strong><em>并发标记</em></strong>——长，和用户的应用程序同时进行，进行GC Roots追踪的过程</p>
+<p><strong>l</strong> <strong><em>重新标记</em></strong>——短暂，为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短</p>
+<p><strong>l</strong> <strong><em>并发清除</em></strong>——长，清除掉标记的对象</p>
+<p><strong>l 优点：</strong></p>
+<p>​    由于整个过程中耗时最长的并发标记和并发清除过程收集器线程都可以与用户线程一起工作，所以，从总体上来说，CMS收集器的内存回收过程是与用户线程一起并发执行的，用户体验好。</p>
+<p>-XX:+UseConcMarkSweepGC ，表示新生代使用ParNew，老年代的用CMS</p>
+<p><strong>l 缺点：</strong></p>
+<ul>
+<li><p>浮动垃圾</p>
+<p>​    由于CMS并发清理阶段用户线程还在运行着，伴随程序运行自然就还会有新的垃圾不断产生，这一部分垃圾出现在标记过程之后，CMS无法在当次收集中处理掉它们，只好留待下一次GC时再清理掉。这一部分垃圾就称为“浮动垃圾”。</p>
+<p>​    为了防止浮动垃圾导致OOM，每次在老年代内存被占了80%时就会进行GC，如果还是OOM了，就让Serial Old 进行处理，这是STW会特别多，影响用户体验。</p>
+</li>
+<li><p>内存碎片</p>
+<p>因为CMS采用的是标记——清除算法，所以会存在内存碎片，导致GC提前进行。</p>
+</li>
+<li><p>CPU敏感：CPU小于4时影响性能</p>
+</li>
+</ul>
+</li>
+<li><p>G1</p>
+  
+
+<p>-XX:+UseG1GC</p>
+<ul>
+<li><p>并发标记周期</p>
+<ul>
+<li><p>初始标记</p>
+<p>​    短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，产生一个全局停顿，都伴随有一次新生代的GC。</p>
+</li>
+<li><p>根区域扫描</p>
+<p>扫描survivor区可以直接到达的老年代区域。</p>
+</li>
+<li><p>并发标记阶段</p>
+<p>扫描和查找整个堆的存活对象，并标记。</p>
+</li>
+<li><p>重新标记</p>
+<p>会产生全局停顿，对并发标记阶段的结果进行修正。</p>
+</li>
+<li><p>独占清理</p>
+<p>会产生全局停顿，对GC回收比例进行排序，供混合收集阶段使用。</p>
+</li>
+<li><p>并发清理</p>
+<p>识别并清理完全空闲的区域，并发进行。</p>
+</li>
+</ul>
+</li>
+<li><p>并行与并发</p>
+<p>​    G1能充分利用多CPU、多核环境下的硬件优势，使用多个CPU（CPU或者CPU核心）来缩短Stop-The-World停顿的时间，部分其他收集器原本需要停顿Java线程执行的GC动作，G1收集器仍然可以通过并发的方式让Java程序继续执行。</p>
+</li>
+<li><p>分代收集</p>
+<p>​    与其他收集器一样，分代概念在G1中依然得以保留。虽然G1可以不需要其他收集器配合就能独立管理整个GC堆，但它能够采用不同的方式去处理新创建的对象和已经存活了一段时间、熬过多次GC的旧对象以获取更好的收集效果。</p>
+
+</li>
+<li><p>空间整合</p>
+<p>​    与CMS的“标记—清理”算法不同，G1从整体来看是基于“标记—整理”算法实现的收集器，从局部（两个Region之间）上来看是基于“复制”算法实现的，但无论如何，这两种算法都意味着G1运作期间不会产生内存空间碎片，收集后能提供规整的可用内存。这种特性有利于程序长时间运行，分配大对象时不会因为无法找到连续内存空间而提前触发下一次GC。</p>
+</li>
+<li><p>内存布局</p>
+<p>​    在G1之前的其他收集器进行收集的范围都是整个新生代或者老年代，而G1不再是这样。使用G1收集器时，Java堆的内存布局就与其他收集器有很大差别，它将整个Java堆划分为多个大小相等的独立区域（Region），虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔离的了，它们都是一部分Region（不需要连续）的集合。</p>
+</li>
+<li><p>混合收集</p>
+<ul>
+<li><p>对含有垃圾比例较高的Region进行回收。</p>
+</li>
+<li><p>G1当出现内存不足的的情况，也可能进行的FullGC回收。</p>
+</li>
+<li><p>G1中重要的参数：</p>
+<p>-XX:MaxGCPauseMillis 指定目标的最大停顿时间，G1尝试调整新生代和老年代的比例，堆大小，晋升年龄来达到这个目标时间。</p>
+<p>-XX:ParallerGCThreads：设置GC的工作线程数量</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-Stop-The-World现象"><a href="#3-Stop-The-World现象" class="headerlink" title="3. Stop The World现象"></a>3. Stop The World现象</h2><p>STW就是暂停用户线程。</p>
+<p>GC收集器和我们GC调优的目标就是尽可能的减少STW的时间和次数。</p>
+<h2 id="4-未来的垃圾回收"><a href="#4-未来的垃圾回收" class="headerlink" title="4. 未来的垃圾回收"></a>4. 未来的垃圾回收</h2><p>​    ZGC通过技术手段把stw的情况控制在仅有一次，就是第一次的初始标记才会发生，这样也就不难理解为什么GC停顿时间不随着堆增大而上升了，再大我也是通过并发的时间去回收了。</p>
+<p>​    关键技术：</p>
+<p>​    <strong>1.</strong> <strong><em>有色指针（Colored Pointers）</em></strong></p>
+<p>​    <strong>2.</strong> <strong><em>加载屏障（Load Barrier）</em></strong></p>
+<h2 id="5-常量池与String"><a href="#5-常量池与String" class="headerlink" title="5. 常量池与String"></a>5. 常量池与String</h2><p>​    常量池有很多概念，包括运行时常量池、class常量池、字符串常量池。</p>
+<p>​    虚拟机规范只规定以上区域属于方法区，并没有规定虚拟机厂商的实现。</p>
+<p>​    严格来说是静态常量池和运行时常量池，静态常量池是存放字符串字面量、符号引用以及类和方法的信息，而运行时常量池存放的是运行时一些直接引用。<br>​    运行时常量池是在类加载完成之后，将静态常量池中的符号引用值转存到运行时常量池中，类在解析之后，将符号引用替换成直接引用。<br>​    这两个常量池在JDK1.7版本之后，就移到堆内存中了，这里指的是物理空间，而逻辑上还是属于方法区（方法区是逻辑分区）。</p>
+<ul>
+<li><p>字面量</p>
+<p>给基本类型变量赋值的方式就叫做字面量或者字面值。</p>
+<p>比如：int i=120; long j=10L;</p>
+</li>
+<li><p>符号引用</p>
+<p>​    包括类和方法的全限定名（例如 String 这个类，它的全限定名就是 Java/lang/String）、字段的名称和描述符以及方法的名称和描述符。</p>
+</li>
+<li><p>直接引用</p>
+<p>具体对象的索引值。</p>
+</li>
+<li><p>String的初始赋值</p>
+ 
+
+<pre><code>而如果调用了insern方法，就是直接在字符串常量池中找字符串，如果没有再创建，返回的是字符串常量池的引用。</code></pre></li>
+</ul>
+<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1>
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="ckewnzdw60004xsvbguiwa95r" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="ckezb34po0002ykvb2pp96j0k" class="article-share-link">Share</a>
       
       
     </footer>
