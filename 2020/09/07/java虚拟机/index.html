@@ -29,7 +29,7 @@
 <meta property="og:image" content="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-1.png">
 <meta property="og:image" content="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-2.png">
 <meta property="article:published_time" content="2020-09-07T10:29:40.923Z">
-<meta property="article:modified_time" content="2020-09-12T06:45:43.988Z">
+<meta property="article:modified_time" content="2020-09-15T15:24:57.522Z">
 <meta property="article:author" content="xuesui">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B.png">
@@ -502,11 +502,69 @@
 
 <pre><code>而如果调用了insern方法，就是直接在字符串常量池中找字符串，如果没有再创建，返回的是字符串常量池的引用。</code></pre></li>
 </ul>
-<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1>
+<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1><h2 id="1-ART和Dalvik"><a href="#1-ART和Dalvik" class="headerlink" title="1. ART和Dalvik"></a>1. ART和Dalvik</h2><p>​    Android应用程序运行在Dalvik/ART虚拟机，并且每一个应用程序对应有一个单独的Dalvik虚拟机实例。Dalvik虚拟机实则也算是一个Java虚拟机，只不过它执行的不是class文件，而是dex文件。</p>
+<p>​    Dalvik虚拟机与Java虚拟机共享有差不多的特性，差别在于两者执行的指令集是不一样的，前者的指令集是基本寄存器的，而后者的指令集是基于堆栈的。</p>
+
+
+
+
+<ul>
+<li><p>基于寄存器的虚拟机：</p>
+<p>​    相当于把基于堆栈的虚拟机的局部变量表和操作数栈合并为了一个虚拟寄存器，模仿CPU寄存器操作，将指令运行步骤大大减少。</p>
+</li>
+</ul>
+<p>​    （1）Dalvik虚拟机执行的是dex字节码，是解释执行，在Android2.2后，加入了JIT（即时编译技术），在运行时可以选择经常执行的代码进行编译优化，在本次程序执行完毕后会清除记录。</p>
+<p>​    （2）在Android5.0后，默认使用ART虚拟机，直接执行本地机器码，而把dex字节码编译成机器码的东西就是AOT（预先编译技术），在程序安装时进行预编译，将应用直接编译为机器码，但是这样的弊端就是安装会非常慢。</p>
+<p>​    （3）在安装时，dalvik将.dex文件优化为.odex文件，ART将.dex文件优化为机器码文件。</p>
+<p>​    （4）Android N ：混合编译，在第一次安装时不执行AOT（安装速度变快），在运行的同时进行JIT，将经常运行的代码进行编译，并保存到Profile文件下。在手机充电或者闲置时，通过AOT技术将Profile文件下的代码进行编译，保存机器码，下次运行时直接使用。</p>
+<h2 id="2-Android类加载器"><a href="#2-Android类加载器" class="headerlink" title="2. Android类加载器"></a>2. Android类加载器</h2>
+
+<p>全局getClassLoader获取到的就是PathClassLoader</p>
+<p>​    类加载过程：</p>
+<ul>
+<li><p>loadClass</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="keyword">boolean</span> resolve)                         <span class="keyword">throws</span> ClassNotFoundException</span><br><span class="line">    &#123;</span><br><span class="line">    Class&lt;?&gt; c = findLoadedClass(name);<span class="comment">//寻找是否已经加载</span></span><br><span class="line">    <span class="keyword">if</span>(c == <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="comment">//如果没有加载，首先找父加载器，这里的父加载器是BootClassLoader</span></span><br><span class="line">        c = parent.loadClass(name, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">        	<span class="comment">//如果还是未加载，就使用自己的类加载器进行加载</span></span><br><span class="line">        	c = findClass(name);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里采用的是双亲委派模型，先让父加载器加载，再让自己加载。</p>
+<p>原因：</p>
+<ul>
+<li>安全性：无法恶意篡改系统已有的类，因为会被BootClassLoader直接加载，加载的是系统层的类</li>
+<li>避免重复加载</li>
+</ul>
+</li>
+<li><p>findLoadedClass 调用的是VMClassLoader类里的方法，直接是native层</p>
+</li>
+<li><p>parent.loadClass</p>
+<p>调用到BaseDexClassLoader的findClass方法。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException&#123;</span><br><span class="line">    Class c = pathList.findClass(name, suppressedExceptions);</span><br><span class="line">    <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而pathList是一个DexPathList对象。</p>
+<p>在pathList中又有一个element数组用于存放多个dex文件。</p>
+<p>最后遍历编译。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"> <span class="keyword">private</span> Element[] dexElements;</span><br><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">     <span class="keyword">for</span> (Element element : dexElements) &#123;</span><br><span class="line">            Class&lt;?&gt; clazz = element.findClass(name, definingContext, suppressed);</span><br><span class="line">            <span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> clazz;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, ClassLoader definingContext,</span><br><span class="line">                List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">            <span class="keyword">return</span> dexFile != <span class="keyword">null</span> ? dexFile.loadClassBinaryName(name, definingContext, suppressed)</span><br><span class="line">                    : <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
+
+<p>直接loadClassBinaryName把dex文件编译加载好。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> Element[] makeDexElements(List&lt;File&gt; files, File optimizedDirectory,</span><br><span class="line">           List&lt;IOException&gt; suppressedExceptions, ClassLoader loader, <span class="keyword">boolean</span> isTrusted)</span><br></pre></td></tr></table></figure>
+
+<p>通过这个方法把element数组初始化，在热修复时也可以通过这个方法，把dex文件构造成element数组，放在pathList中dexElements的最前面。</p>
+</li>
+</ul>
+  
+
+<ul>
+<li><p>findClass</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException &#123;</span><br><span class="line">       <span class="keyword">return</span> Class.classForName(name, <span class="keyword">false</span>, <span class="keyword">null</span>);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>直接寻找类名并加载。</p>
+</li>
+</ul>
+
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="ckezb34po0002ykvb2pp96j0k" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" data-id="ckf43yqd50003bovb9xgbdf3u" class="article-share-link">Share</a>
       
       
     </footer>
