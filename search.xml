@@ -104,6 +104,88 @@
 ]]></content>
   </entry>
   <entry>
+    <title>View的创建流程</title>
+    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
+    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
+
+<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
+<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
+</li>
+<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
+</li>
+<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
+</li>
+<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
+<ul>
+<li><p>r.mPendingRemoveWindow = r.window</p>
+</li>
+<li><p>r.window = r.activity.getWindow()</p>
+</li>
+<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
+</li>
+<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
+        <span class="keyword">return</span> mWindow;
+    }
+&lt;!--￼<span class="number">0</span>--&gt;
+</code></pre>
+</li>
+</ul>
+<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
+</li>
+<li><p>此时的结构：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
+</li>
+<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
+</li>
+</ul>
+<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
+<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
+</li>
+<li><p>installDecor()，对decor进行一系列操作</p>
+<ul>
+<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
+</li>
+<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
+</li>
+<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
+<ul>
+<li>layoutResource就是传入的布局文件</li>
+<li>mLayoutInflater为布局加载器</li>
+<li>final View root = inflater.inflate(layoutResource, null)</li>
+<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
+<li>通过前两步把布局文件加载为View并且添加进去</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
+</li>
+</ul>
+</li>
+<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
+<ul>
+<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
+<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
+<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
+</ul>
+</li>
+<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
+<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
+</li>
+<li><p>关于inflate的attachToRoot参数的解析</p>
+<ul>
+<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
+<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
+<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
+</ul>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
     <title>java虚拟机</title>
     <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
     <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
@@ -562,114 +644,6 @@
 ]]></content>
   </entry>
   <entry>
-    <title>插件化换肤</title>
-    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
-    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
-  </entry>
-  <entry>
-    <title>自定义View</title>
-    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
-    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
-<ul>
-<li>布局：onMeasure , onLayout</li>
-<li>绘制: onDraw</li>
-<li>事件分发：onTouchEvent</li>
-</ul>
-<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
-<li>View类型：实现OnMeasure和OnDraw</li>
-<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
-</ul>
-<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
-<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
-<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
-<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
-</ol>
-<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
-<li><p>Android坐标系</p>
-<p>(1)以左上角为坐标原点</p>
-<p>(2)向右为x轴正方向，向下为y轴正方向</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
-</li>
-<li><p>View位置坐标系</p>
-<ul>
-<li><p>Top：子View上边界到父view上边界的距离</p>
-</li>
-<li><p>Left：子View左边界到父view左边界的距离</p>
-</li>
-<li><p>Bottom：子View下边距到父View上边界的距离</p>
-</li>
-<li><p>Right：子View右边界到父view左边界的距离</p>
-</li>
-</ul>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
-</li>
-<li><p>获取位置的方法</p>
-<ul>
-<li>调用get方法获取相对于父View的距离</li>
-<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
-</ul>
-</li>
-</ul>
-<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
-
-<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
-
-
-
-<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
-<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
-</li>
-<li><p>其中mode类型包括：</p>
-<ul>
-<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
-<li>EXACTLY：确切的大小，如：100dp</li>
-<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
-</ul>
-</li>
-</ul>
-<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
-<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
-<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
-<ul>
-<li><p>原理</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
-
-
-
-</li>
-</ul>
-<p>  通俗易懂的一个例子：</p>
-  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
-
-<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
-<li><p>先度量孩子</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
-
-
-
-</li>
-</ul>
-<ul>
-<li><p>再度量自己</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
-
-<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
-</li>
-</ul>
-<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
-
-<p>调用layout方法进行布局</p>
-<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
-<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
-<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
-]]></content>
-  </entry>
-  <entry>
     <title>事件分发二级联动</title>
     <url>/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/</url>
     <content><![CDATA[<h2 id="1-事件分发流程"><a href="#1-事件分发流程" class="headerlink" title="1 事件分发流程"></a>1 事件分发流程</h2><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%872.png" class title="分发流程">
@@ -849,85 +823,212 @@
 ]]></content>
   </entry>
   <entry>
-    <title>View的创建流程</title>
-    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
-    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
+    <title>数据结构与算法</title>
+    <url>/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/</url>
+    <content><![CDATA[<h1 id="一、概论"><a href="#一、概论" class="headerlink" title="一、概论"></a>一、概论</h1><p>数据结构分为两个部分，逻辑结构与物理结构。</p>
+<ul>
+<li>逻辑结构：指数据对象间的关系，类似于集合、树形结构、线性结构、图形结构</li>
+<li>物理结构：在计算机中存储的方式，类似于顺序存储、链式存储</li>
+</ul>
+<h1 id="二、线性表"><a href="#二、线性表" class="headerlink" title="二、线性表"></a>二、线性表</h1><h2 id="1、-顺序表（顺序存储）"><a href="#1、-顺序表（顺序存储）" class="headerlink" title="1、 顺序表（顺序存储）"></a>1、 顺序表（顺序存储）</h2><h3 id="1-1-常用的数组"><a href="#1-1-常用的数组" class="headerlink" title="1.1 常用的数组"></a>1.1 常用的数组</h3><ul>
+<li>使用起来简单</li>
+<li>修改和查询时时间效率高</li>
+<li>占据连续空间：初始化数组时需要指定数组大小，分配一段连续空间</li>
+<li>空间效率低：会存在很多空间没有使用的情况</li>
+<li>操作麻烦：在增加、删除时会移动大量数据</li>
+</ul>
+<h3 id="1-2-ArrayList扩容机制"><a href="#1-2-ArrayList扩容机制" class="headerlink" title="1.2 ArrayList扩容机制"></a>1.2 ArrayList扩容机制</h3><p>如果其大小超过了内部数组大小，就进行判断：</p>
+<ul>
+<li><p>ArrayList大小 &lt;= 12 </p>
+<p>就把数组扩大12</p>
+</li>
+<li><p>ArrayList大小 &gt; 12 </p>
+<p>就把数组扩大为原来的1.5倍</p>
+</li>
+</ul>
+<h3 id="1-3-源码解析"><a href="#1-3-源码解析" class="headerlink" title="1.3 源码解析"></a>1.3 源码解析</h3><ul>
+<li><p>继承关系</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E9%A1%BA%E5%BA%8F%E8%A1%A8%E7%BB%A7%E6%89%BF%E5%85%B3%E7%B3%BB.png" class title="顺序表继承关系">
+</li>
+<li><p>迭代器</p>
+<p>可以通过迭代器顺序删除顺序表中的元素，避免使用for循环，造成很多数据的移动。</p>
+<ul>
+<li>hasNext()：判断是否还有下一个数据</li>
+<li>next()：获取下一个节点的数据</li>
+<li>remove()：删除最近访问的节点，必须和next()一起使用，在next()之后使用</li>
+</ul>
+</li>
+</ul>
+<h2 id="2、链表（链式存储）"><a href="#2、链表（链式存储）" class="headerlink" title="2、链表（链式存储）"></a>2、链表（链式存储）</h2><h3 id="2-1-双向链表LinkedList"><a href="#2-1-双向链表LinkedList" class="headerlink" title="2.1 双向链表LinkedList"></a>2.1 双向链表LinkedList</h3><ul>
+<li><p>继承关系</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%8F%8C%E9%93%BE%E8%A1%A8%E7%BB%A7%E6%89%BF%E5%85%B3%E7%B3%BB.png" class title="双链表继承关系">
+</li>
+<li><p>同样也可以利用迭代器进行顺序移除</p>
+</li>
+</ul>
+<h3 id="2-2-线性表对比"><a href="#2-2-线性表对比" class="headerlink" title="2.2 线性表对比"></a>2.2 线性表对比</h3><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E7%BA%BF%E6%80%A7%E8%A1%A8%E5%AF%B9%E6%AF%94.png" class title="线性表对比">
 
-<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
-<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
-</li>
-<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
-</li>
-<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
-</li>
-<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
+<h2 id="3、面试题总结"><a href="#3、面试题总结" class="headerlink" title="3、面试题总结"></a>3、面试题总结</h2><ul>
+<li><p>ArrayList与LinkedList的区别？</p>
 <ul>
-<li><p>r.mPendingRemoveWindow = r.window</p>
-</li>
-<li><p>r.window = r.activity.getWindow()</p>
-</li>
-<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
-</li>
-<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
-        <span class="keyword">return</span> mWindow;
-    }
-&lt;!--￼<span class="number">0</span>--&gt;
-</code></pre>
-</li>
+<li>前者存储空间连续，后者可以连续也可以不连续</li>
+<li>前者大小固定，后者大小不固定</li>
+<li>前者尾插、尾删效率高，查找效率高，删除、插入效率低，后者查找效率低，删除、插入效率高</li>
 </ul>
-<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
 </li>
-<li><p>此时的结构：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
-</li>
-<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
-</li>
-</ul>
-<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
-<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
-</li>
-<li><p>installDecor()，对decor进行一系列操作</p>
+<li><p>ArrayList的大小是如何自动增加的？</p>
+<p>如果其大小超过了内部数组大小，就进行判断：</p>
 <ul>
-<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
+<li><p>ArrayList大小 &lt;= 12 </p>
+<p>就把数组扩大12</p>
 </li>
-<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
+<li><p>ArrayList大小 &gt; 12 </p>
+<p>就把数组扩大为原来的1.5倍</p>
 </li>
-<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
+</ul>
+</li>
+<li><p>在索引中ArrayList的增加或者删除某个对象的运行过程？效率很低吗？解释一下为什么？</p>
+<p>对的，因为会调用arrayCopy方法，有大量的数据移动操作。</p>
+</li>
+<li><p>ArrayList如何顺序删除节点？</p>
+<p>用迭代器，remove必须在next之后使用，因为是利用一个cursor标签来标记当前节点。</p>
+</li>
+</ul>
+<h1 id="三、队列"><a href="#三、队列" class="headerlink" title="三、队列"></a>三、队列</h1><p>为了解决队列的假溢出，便采用了循环队列。</p>
+<h2 id="1、循环队列（顺序存储结构）"><a href="#1、循环队列（顺序存储结构）" class="headerlink" title="1、循环队列（顺序存储结构）"></a>1、循环队列（顺序存储结构）</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%BE%AA%E7%8E%AF%E9%98%9F%E5%88%97.png" class title="循环队列">
+
+<h2 id="2、链式队列（链式存储结构）"><a href="#2、链式队列（链式存储结构）" class="headerlink" title="2、链式队列（链式存储结构）"></a>2、链式队列（链式存储结构）</h2><p>就相当于单链表，但是只能从尾部插入，从头部移除。</p>
+<h2 id="3、队列的变形"><a href="#3、队列的变形" class="headerlink" title="3、队列的变形"></a>3、队列的变形</h2><h3 id="3-1-双端队列Deque"><a href="#3-1-双端队列Deque" class="headerlink" title="3.1 双端队列Deque"></a>3.1 双端队列Deque</h3><p>Deque是一种具有<strong>队列和栈的性质</strong>的数据结构。双端队列中的元素可以从两端弹出，其限定插入和删除操作在表的两端进行。</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%8F%8C%E7%AB%AF%E9%98%9F%E5%88%97.png" class title="双端队列">
+
+<h3 id="3-2-优先级队列"><a href="#3-2-优先级队列" class="headerlink" title="3.2 优先级队列"></a>3.2 优先级队列</h3><p>​    优先级队列和通常的栈和队列一样，只不过里面的每一个元素都有一个”优先级”，在处理的时候，<strong>首先处理优先级最高的</strong>。如果两个元素具有相同的优先级，则按照他们插入到队列中的先后顺序处理。</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E4%BC%98%E5%85%88%E7%BA%A7%E9%98%9F%E5%88%97.png" class title="优先级队列">
+
+
+
+<h1 id="四、栈"><a href="#四、栈" class="headerlink" title="四、栈"></a>四、栈</h1><h2 id="1、面试题"><a href="#1、面试题" class="headerlink" title="1、面试题"></a>1、面试题</h2><ul>
+<li><p>Java中的Stack是通过Vector来实现的，这种设计被认为是不良的设计，说说你的看法？</p>
+<p>因为vector中还有很多不符合栈的特性的方法，类似add。</p>
+</li>
+</ul>
+<h2 id="2、逆波兰表达式"><a href="#2、逆波兰表达式" class="headerlink" title="2、逆波兰表达式"></a>2、逆波兰表达式</h2><ul>
+<li>有两个栈，操作数栈和运算符栈</li>
+<li>如果为操作数，则把操作数入操作数栈</li>
+<li>如果为运算符<ul>
+<li>为左括号时，把左括号入运算符栈</li>
+<li>为右括号时，把运算符栈中所有运算符出栈，且放入操作数栈中，直到遇到左括号，抛弃左括号</li>
+<li>为非括号运算符时，将其与运算符栈栈顶的元素对比，如果优先级更小或者相等，将栈顶运算符出栈，且入栈到操作数栈，直到优先级相等或更大，入运算符栈</li>
+</ul>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
+    <title>插件化换肤</title>
+    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
+    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
+  </entry>
+  <entry>
+    <title>自定义View</title>
+    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
+    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
 <ul>
-<li>layoutResource就是传入的布局文件</li>
-<li>mLayoutInflater为布局加载器</li>
-<li>final View root = inflater.inflate(layoutResource, null)</li>
-<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
-<li>通过前两步把布局文件加载为View并且添加进去</li>
+<li>布局：onMeasure , onLayout</li>
+<li>绘制: onDraw</li>
+<li>事件分发：onTouchEvent</li>
 </ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
-</li>
+<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
+<li>View类型：实现OnMeasure和OnDraw</li>
+<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
 </ul>
+<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
+<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
+<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
+<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
+</ol>
+<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
+<li><p>Android坐标系</p>
+<p>(1)以左上角为坐标原点</p>
+<p>(2)向右为x轴正方向，向下为y轴正方向</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
 </li>
-<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
+<li><p>View位置坐标系</p>
 <ul>
-<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
-<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
-<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
+<li><p>Top：子View上边界到父view上边界的距离</p>
+</li>
+<li><p>Left：子View左边界到父view左边界的距离</p>
+</li>
+<li><p>Bottom：子View下边距到父View上边界的距离</p>
+</li>
+<li><p>Right：子View右边界到父view左边界的距离</p>
+</li>
 </ul>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
 </li>
-<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
-<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
-</li>
-<li><p>关于inflate的attachToRoot参数的解析</p>
+<li><p>获取位置的方法</p>
 <ul>
-<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
-<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
-<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
+<li>调用get方法获取相对于父View的距离</li>
+<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
 </ul>
 </li>
 </ul>
+<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
+
+<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
+
+
+
+<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
+<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
+</li>
+<li><p>其中mode类型包括：</p>
+<ul>
+<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
+<li>EXACTLY：确切的大小，如：100dp</li>
+<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
+</ul>
+</li>
+</ul>
+<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
+<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
+<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
+<ul>
+<li><p>原理</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
+
+
+
+</li>
+</ul>
+<p>  通俗易懂的一个例子：</p>
+  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
+
+<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
+<li><p>先度量孩子</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<ul>
+<li><p>再度量自己</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
+
+<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
+</li>
+</ul>
+<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
+
+<p>调用layout方法进行布局</p>
+<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
+<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
+<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
 ]]></content>
   </entry>
 </search>
