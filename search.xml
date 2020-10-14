@@ -104,88 +104,6 @@
 ]]></content>
   </entry>
   <entry>
-    <title>View的创建流程</title>
-    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
-    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
-
-<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
-<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
-</li>
-<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
-</li>
-<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
-</li>
-<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
-<ul>
-<li><p>r.mPendingRemoveWindow = r.window</p>
-</li>
-<li><p>r.window = r.activity.getWindow()</p>
-</li>
-<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
-</li>
-<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
-        <span class="keyword">return</span> mWindow;
-    }
-&lt;!--￼<span class="number">0</span>--&gt;
-</code></pre>
-</li>
-</ul>
-<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
-</li>
-<li><p>此时的结构：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
-</li>
-<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
-</li>
-</ul>
-<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
-<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
-</li>
-<li><p>installDecor()，对decor进行一系列操作</p>
-<ul>
-<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
-</li>
-<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
-</li>
-<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
-<ul>
-<li>layoutResource就是传入的布局文件</li>
-<li>mLayoutInflater为布局加载器</li>
-<li>final View root = inflater.inflate(layoutResource, null)</li>
-<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
-<li>通过前两步把布局文件加载为View并且添加进去</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
-</li>
-</ul>
-</li>
-<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
-<ul>
-<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
-<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
-<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
-</ul>
-</li>
-<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
-<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
-</li>
-<li><p>关于inflate的attachToRoot参数的解析</p>
-<ul>
-<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
-<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
-<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
-</ul>
-</li>
-</ul>
-]]></content>
-  </entry>
-  <entry>
     <title>java虚拟机</title>
     <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
     <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
@@ -644,6 +562,93 @@
 ]]></content>
   </entry>
   <entry>
+    <title>View的创建流程</title>
+    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
+    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
+
+<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
+<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
+</li>
+<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
+</li>
+<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
+</li>
+<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
+<ul>
+<li><p>r.mPendingRemoveWindow = r.window</p>
+</li>
+<li><p>r.window = r.activity.getWindow()</p>
+</li>
+<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
+</li>
+<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
+        <span class="keyword">return</span> mWindow;
+    }
+&lt;!--￼<span class="number">0</span>--&gt;
+</code></pre>
+</li>
+</ul>
+<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
+</li>
+<li><p>此时的结构：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
+</li>
+<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
+</li>
+</ul>
+<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
+<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
+</li>
+<li><p>installDecor()，对decor进行一系列操作</p>
+<ul>
+<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
+</li>
+<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
+</li>
+<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
+<ul>
+<li>layoutResource就是传入的布局文件</li>
+<li>mLayoutInflater为布局加载器</li>
+<li>final View root = inflater.inflate(layoutResource, null)</li>
+<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
+<li>通过前两步把布局文件加载为View并且添加进去</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
+</li>
+</ul>
+</li>
+<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
+<ul>
+<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
+<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
+<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
+</ul>
+</li>
+<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
+<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
+</li>
+<li><p>关于inflate的attachToRoot参数的解析</p>
+<ul>
+<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
+<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
+<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
+</ul>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
+    <title>插件化换肤</title>
+    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
+    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
+  </entry>
+  <entry>
     <title>事件分发二级联动</title>
     <url>/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/</url>
     <content><![CDATA[<h2 id="1-事件分发流程"><a href="#1-事件分发流程" class="headerlink" title="1 事件分发流程"></a>1 事件分发流程</h2><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%872.png" class title="分发流程">
@@ -823,112 +828,6 @@
 ]]></content>
   </entry>
   <entry>
-    <title>数据结构与算法</title>
-    <url>/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/</url>
-    <content><![CDATA[<h1 id="一、概论"><a href="#一、概论" class="headerlink" title="一、概论"></a>一、概论</h1><p>数据结构分为两个部分，逻辑结构与物理结构。</p>
-<ul>
-<li>逻辑结构：指数据对象间的关系，类似于集合、树形结构、线性结构、图形结构</li>
-<li>物理结构：在计算机中存储的方式，类似于顺序存储、链式存储</li>
-</ul>
-<h1 id="二、线性表"><a href="#二、线性表" class="headerlink" title="二、线性表"></a>二、线性表</h1><h2 id="1、-顺序表（顺序存储）"><a href="#1、-顺序表（顺序存储）" class="headerlink" title="1、 顺序表（顺序存储）"></a>1、 顺序表（顺序存储）</h2><h3 id="1-1-常用的数组"><a href="#1-1-常用的数组" class="headerlink" title="1.1 常用的数组"></a>1.1 常用的数组</h3><ul>
-<li>使用起来简单</li>
-<li>修改和查询时时间效率高</li>
-<li>占据连续空间：初始化数组时需要指定数组大小，分配一段连续空间</li>
-<li>空间效率低：会存在很多空间没有使用的情况</li>
-<li>操作麻烦：在增加、删除时会移动大量数据</li>
-</ul>
-<h3 id="1-2-ArrayList扩容机制"><a href="#1-2-ArrayList扩容机制" class="headerlink" title="1.2 ArrayList扩容机制"></a>1.2 ArrayList扩容机制</h3><p>如果其大小超过了内部数组大小，就进行判断：</p>
-<ul>
-<li><p>ArrayList大小 &lt;= 12 </p>
-<p>就把数组扩大12</p>
-</li>
-<li><p>ArrayList大小 &gt; 12 </p>
-<p>就把数组扩大为原来的1.5倍</p>
-</li>
-</ul>
-<h3 id="1-3-源码解析"><a href="#1-3-源码解析" class="headerlink" title="1.3 源码解析"></a>1.3 源码解析</h3><ul>
-<li><p>继承关系</p>
-<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E9%A1%BA%E5%BA%8F%E8%A1%A8%E7%BB%A7%E6%89%BF%E5%85%B3%E7%B3%BB.png" class title="顺序表继承关系">
-</li>
-<li><p>迭代器</p>
-<p>可以通过迭代器顺序删除顺序表中的元素，避免使用for循环，造成很多数据的移动。</p>
-<ul>
-<li>hasNext()：判断是否还有下一个数据</li>
-<li>next()：获取下一个节点的数据</li>
-<li>remove()：删除最近访问的节点，必须和next()一起使用，在next()之后使用</li>
-</ul>
-</li>
-</ul>
-<h2 id="2、链表（链式存储）"><a href="#2、链表（链式存储）" class="headerlink" title="2、链表（链式存储）"></a>2、链表（链式存储）</h2><h3 id="2-1-双向链表LinkedList"><a href="#2-1-双向链表LinkedList" class="headerlink" title="2.1 双向链表LinkedList"></a>2.1 双向链表LinkedList</h3><ul>
-<li><p>继承关系</p>
-<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%8F%8C%E9%93%BE%E8%A1%A8%E7%BB%A7%E6%89%BF%E5%85%B3%E7%B3%BB.png" class title="双链表继承关系">
-</li>
-<li><p>同样也可以利用迭代器进行顺序移除</p>
-</li>
-</ul>
-<h3 id="2-2-线性表对比"><a href="#2-2-线性表对比" class="headerlink" title="2.2 线性表对比"></a>2.2 线性表对比</h3><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E7%BA%BF%E6%80%A7%E8%A1%A8%E5%AF%B9%E6%AF%94.png" class title="线性表对比">
-
-<h2 id="3、面试题总结"><a href="#3、面试题总结" class="headerlink" title="3、面试题总结"></a>3、面试题总结</h2><ul>
-<li><p>ArrayList与LinkedList的区别？</p>
-<ul>
-<li>前者存储空间连续，后者可以连续也可以不连续</li>
-<li>前者大小固定，后者大小不固定</li>
-<li>前者尾插、尾删效率高，查找效率高，删除、插入效率低，后者查找效率低，删除、插入效率高</li>
-</ul>
-</li>
-<li><p>ArrayList的大小是如何自动增加的？</p>
-<p>如果其大小超过了内部数组大小，就进行判断：</p>
-<ul>
-<li><p>ArrayList大小 &lt;= 12 </p>
-<p>就把数组扩大12</p>
-</li>
-<li><p>ArrayList大小 &gt; 12 </p>
-<p>就把数组扩大为原来的1.5倍</p>
-</li>
-</ul>
-</li>
-<li><p>在索引中ArrayList的增加或者删除某个对象的运行过程？效率很低吗？解释一下为什么？</p>
-<p>对的，因为会调用arrayCopy方法，有大量的数据移动操作。</p>
-</li>
-<li><p>ArrayList如何顺序删除节点？</p>
-<p>用迭代器，remove必须在next之后使用，因为是利用一个cursor标签来标记当前节点。</p>
-</li>
-</ul>
-<h1 id="三、队列"><a href="#三、队列" class="headerlink" title="三、队列"></a>三、队列</h1><p>为了解决队列的假溢出，便采用了循环队列。</p>
-<h2 id="1、循环队列（顺序存储结构）"><a href="#1、循环队列（顺序存储结构）" class="headerlink" title="1、循环队列（顺序存储结构）"></a>1、循环队列（顺序存储结构）</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%BE%AA%E7%8E%AF%E9%98%9F%E5%88%97.png" class title="循环队列">
-
-<h2 id="2、链式队列（链式存储结构）"><a href="#2、链式队列（链式存储结构）" class="headerlink" title="2、链式队列（链式存储结构）"></a>2、链式队列（链式存储结构）</h2><p>就相当于单链表，但是只能从尾部插入，从头部移除。</p>
-<h2 id="3、队列的变形"><a href="#3、队列的变形" class="headerlink" title="3、队列的变形"></a>3、队列的变形</h2><h3 id="3-1-双端队列Deque"><a href="#3-1-双端队列Deque" class="headerlink" title="3.1 双端队列Deque"></a>3.1 双端队列Deque</h3><p>Deque是一种具有<strong>队列和栈的性质</strong>的数据结构。双端队列中的元素可以从两端弹出，其限定插入和删除操作在表的两端进行。</p>
-<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%8F%8C%E7%AB%AF%E9%98%9F%E5%88%97.png" class title="双端队列">
-
-<h3 id="3-2-优先级队列"><a href="#3-2-优先级队列" class="headerlink" title="3.2 优先级队列"></a>3.2 优先级队列</h3><p>​    优先级队列和通常的栈和队列一样，只不过里面的每一个元素都有一个”优先级”，在处理的时候，<strong>首先处理优先级最高的</strong>。如果两个元素具有相同的优先级，则按照他们插入到队列中的先后顺序处理。</p>
-<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E4%BC%98%E5%85%88%E7%BA%A7%E9%98%9F%E5%88%97.png" class title="优先级队列">
-
-
-
-<h1 id="四、栈"><a href="#四、栈" class="headerlink" title="四、栈"></a>四、栈</h1><h2 id="1、面试题"><a href="#1、面试题" class="headerlink" title="1、面试题"></a>1、面试题</h2><ul>
-<li><p>Java中的Stack是通过Vector来实现的，这种设计被认为是不良的设计，说说你的看法？</p>
-<p>因为vector中还有很多不符合栈的特性的方法，类似add。</p>
-</li>
-</ul>
-<h2 id="2、逆波兰表达式"><a href="#2、逆波兰表达式" class="headerlink" title="2、逆波兰表达式"></a>2、逆波兰表达式</h2><ul>
-<li>有两个栈，操作数栈和运算符栈</li>
-<li>如果为操作数，则把操作数入操作数栈</li>
-<li>如果为运算符<ul>
-<li>为左括号时，把左括号入运算符栈</li>
-<li>为右括号时，把运算符栈中所有运算符出栈，且放入操作数栈中，直到遇到左括号，抛弃左括号</li>
-<li>为非括号运算符时，将其与运算符栈栈顶的元素对比，如果优先级更小或者相等，将栈顶运算符出栈，且入栈到操作数栈，直到优先级相等或更大，入运算符栈</li>
-</ul>
-</li>
-</ul>
-]]></content>
-  </entry>
-  <entry>
-    <title>插件化换肤</title>
-    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
-    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
-  </entry>
-  <entry>
     <title>自定义View</title>
     <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
     <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
@@ -1029,6 +928,395 @@
 <h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
 <h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
 <h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
+]]></content>
+  </entry>
+  <entry>
+    <title>数据结构与算法</title>
+    <url>/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/</url>
+    <content><![CDATA[<h1 id="一、概论"><a href="#一、概论" class="headerlink" title="一、概论"></a>一、概论</h1><p>数据结构分为两个部分，逻辑结构与物理结构。</p>
+<ul>
+<li>逻辑结构：指数据对象间的关系，类似于集合、树形结构、线性结构、图形结构</li>
+<li>物理结构：在计算机中存储的方式，类似于顺序存储、链式存储</li>
+</ul>
+<h1 id="二、线性表"><a href="#二、线性表" class="headerlink" title="二、线性表"></a>二、线性表</h1><h2 id="1、-顺序表（顺序存储）"><a href="#1、-顺序表（顺序存储）" class="headerlink" title="1、 顺序表（顺序存储）"></a>1、 顺序表（顺序存储）</h2><h3 id="1-1-常用的数组"><a href="#1-1-常用的数组" class="headerlink" title="1.1 常用的数组"></a>1.1 常用的数组</h3><ul>
+<li>使用起来简单</li>
+<li>修改和查询时时间效率高</li>
+<li>占据连续空间：初始化数组时需要指定数组大小，分配一段连续空间</li>
+<li>空间效率低：会存在很多空间没有使用的情况</li>
+<li>操作麻烦：在增加、删除时会移动大量数据</li>
+</ul>
+<h3 id="1-2-ArrayList扩容机制"><a href="#1-2-ArrayList扩容机制" class="headerlink" title="1.2 ArrayList扩容机制"></a>1.2 ArrayList扩容机制</h3><p>如果其大小超过了内部数组大小，就进行判断：</p>
+<ul>
+<li><p>ArrayList大小 &lt;= 12 </p>
+<p>就把数组扩大12</p>
+</li>
+<li><p>ArrayList大小 &gt; 12 </p>
+<p>就把数组扩大为原来的1.5倍</p>
+</li>
+</ul>
+<h3 id="1-3-源码解析"><a href="#1-3-源码解析" class="headerlink" title="1.3 源码解析"></a>1.3 源码解析</h3><ul>
+<li><p>继承关系</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E9%A1%BA%E5%BA%8F%E8%A1%A8%E7%BB%A7%E6%89%BF%E5%85%B3%E7%B3%BB.png" class title="顺序表继承关系">
+</li>
+<li><p>迭代器</p>
+<p>可以通过迭代器顺序删除顺序表中的元素，避免使用for循环，造成很多数据的移动。</p>
+<ul>
+<li>hasNext()：判断是否还有下一个数据</li>
+<li>next()：获取下一个节点的数据</li>
+<li>remove()：删除最近访问的节点，必须和next()一起使用，在next()之后使用</li>
+</ul>
+</li>
+</ul>
+<h2 id="2、链表（链式存储）"><a href="#2、链表（链式存储）" class="headerlink" title="2、链表（链式存储）"></a>2、链表（链式存储）</h2><h3 id="2-1-双向链表LinkedList"><a href="#2-1-双向链表LinkedList" class="headerlink" title="2.1 双向链表LinkedList"></a>2.1 双向链表LinkedList</h3><ul>
+<li><p>继承关系</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%8F%8C%E9%93%BE%E8%A1%A8%E7%BB%A7%E6%89%BF%E5%85%B3%E7%B3%BB.png" class title="双链表继承关系">
+</li>
+<li><p>同样也可以利用迭代器进行顺序移除</p>
+</li>
+</ul>
+<h3 id="2-2-线性表对比"><a href="#2-2-线性表对比" class="headerlink" title="2.2 线性表对比"></a>2.2 线性表对比</h3><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E7%BA%BF%E6%80%A7%E8%A1%A8%E5%AF%B9%E6%AF%94.png" class title="线性表对比">
+
+<h2 id="3、面试题总结"><a href="#3、面试题总结" class="headerlink" title="3、面试题总结"></a>3、面试题总结</h2><ul>
+<li><p>ArrayList与LinkedList的区别？</p>
+<ul>
+<li>前者存储空间连续，后者可以连续也可以不连续</li>
+<li>前者大小固定，后者大小不固定</li>
+<li>前者尾插、尾删效率高，查找效率高，删除、插入效率低，后者查找效率低，删除、插入效率高</li>
+</ul>
+</li>
+<li><p>ArrayList的大小是如何自动增加的？</p>
+<p>如果其大小超过了内部数组大小，就进行判断：</p>
+<ul>
+<li><p>ArrayList大小 &lt;= 12 </p>
+<p>就把数组扩大12</p>
+</li>
+<li><p>ArrayList大小 &gt; 12 </p>
+<p>就把数组扩大为原来的1.5倍</p>
+</li>
+</ul>
+</li>
+<li><p>在索引中ArrayList的增加或者删除某个对象的运行过程？效率很低吗？解释一下为什么？</p>
+<p>对的，因为会调用arrayCopy方法，有大量的数据移动操作。</p>
+</li>
+<li><p>ArrayList如何顺序删除节点？</p>
+<p>用迭代器，remove必须在next之后使用，因为是利用一个cursor标签来标记当前节点。</p>
+</li>
+</ul>
+<h1 id="三、队列"><a href="#三、队列" class="headerlink" title="三、队列"></a>三、队列</h1><p>为了解决队列的假溢出，便采用了循环队列。</p>
+<h2 id="1、循环队列（顺序存储结构）"><a href="#1、循环队列（顺序存储结构）" class="headerlink" title="1、循环队列（顺序存储结构）"></a>1、循环队列（顺序存储结构）</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%BE%AA%E7%8E%AF%E9%98%9F%E5%88%97.png" class title="循环队列">
+
+<h2 id="2、链式队列（链式存储结构）"><a href="#2、链式队列（链式存储结构）" class="headerlink" title="2、链式队列（链式存储结构）"></a>2、链式队列（链式存储结构）</h2><p>就相当于单链表，但是只能从尾部插入，从头部移除。</p>
+<h2 id="3、队列的变形"><a href="#3、队列的变形" class="headerlink" title="3、队列的变形"></a>3、队列的变形</h2><h3 id="3-1-双端队列Deque"><a href="#3-1-双端队列Deque" class="headerlink" title="3.1 双端队列Deque"></a>3.1 双端队列Deque</h3><p>Deque是一种具有<strong>队列和栈的性质</strong>的数据结构。双端队列中的元素可以从两端弹出，其限定插入和删除操作在表的两端进行。</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%8F%8C%E7%AB%AF%E9%98%9F%E5%88%97.png" class title="双端队列">
+
+<h3 id="3-2-优先级队列"><a href="#3-2-优先级队列" class="headerlink" title="3.2 优先级队列"></a>3.2 优先级队列</h3><p>​    优先级队列和通常的栈和队列一样，只不过里面的每一个元素都有一个”优先级”，在处理的时候，<strong>首先处理优先级最高的</strong>。如果两个元素具有相同的优先级，则按照他们插入到队列中的先后顺序处理。</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E4%BC%98%E5%85%88%E7%BA%A7%E9%98%9F%E5%88%97.png" class title="优先级队列">
+
+
+
+<h1 id="四、栈"><a href="#四、栈" class="headerlink" title="四、栈"></a>四、栈</h1><h2 id="1、面试题"><a href="#1、面试题" class="headerlink" title="1、面试题"></a>1、面试题</h2><ul>
+<li><p>Java中的Stack是通过Vector来实现的，这种设计被认为是不良的设计，说说你的看法？</p>
+<p>因为vector中还有很多不符合栈的特性的方法，类似add。</p>
+</li>
+</ul>
+<h2 id="2、逆波兰表达式"><a href="#2、逆波兰表达式" class="headerlink" title="2、逆波兰表达式"></a>2、逆波兰表达式</h2><ul>
+<li>有两个栈，操作数栈和运算符栈</li>
+<li>如果为操作数，则把操作数入操作数栈</li>
+<li>如果为运算符<ul>
+<li>为左括号时，把左括号入运算符栈</li>
+<li>为右括号时，把运算符栈中所有运算符出栈，且放入操作数栈中，直到遇到左括号，抛弃左括号</li>
+<li>为非括号运算符时，将其与运算符栈栈顶的元素对比，如果优先级更小或者相等，将栈顶运算符出栈，且入栈到操作数栈，直到优先级相等或更大，入运算符栈</li>
+</ul>
+</li>
+</ul>
+<h1 id="五、Hash表"><a href="#五、Hash表" class="headerlink" title="五、Hash表"></a>五、Hash表</h1><h2 id="1、结构"><a href="#1、结构" class="headerlink" title="1、结构"></a>1、结构</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/Hash%E8%A1%A8%E7%BB%93%E6%9E%84.png" class title="Hash表结构">
+
+<p>可以看出哈希表是由数组和链表组合构成的结构，在java8之后，将链表改成了红黑树（为了提高查找性能，O(n）-&gt; O(logn)）</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E7%BA%A2%E9%BB%91%E6%A0%91.png" class title="红黑树">
+
+
+
+<p>而每个结点就可以存储一个数据，节点内部的组成：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">static</span> <span class="class"><span class="keyword">class</span> <span class="title">Node</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt; <span class="keyword">implements</span> <span class="title">Map</span>.<span class="title">Entry</span>&lt;<span class="title">K</span>,<span class="title">V</span>&gt;</span>&#123;</span><br><span class="line">    <span class="keyword">int</span> hash;<span class="comment">//哈希值，hashcode</span></span><br><span class="line">    K key;</span><br><span class="line">    V value;</span><br><span class="line">    Node&lt;K,V&gt; next;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="2、流程-此处展示java8以前"><a href="#2、流程-此处展示java8以前" class="headerlink" title="2、流程(此处展示java8以前)"></a>2、流程(此处展示java8以前)</h2><h3 id="2-1-put"><a href="#2-1-put" class="headerlink" title="2.1 put"></a>2.1 put</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> V <span class="title">put</span><span class="params">(K key, V value)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> putVal(hash(key), key, value, <span class="keyword">false</span>, <span class="keyword">true</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">final</span> V <span class="title">putVal</span><span class="params">(<span class="keyword">int</span> hash, K key, V value, <span class="keyword">boolean</span> onlyIfAbsent,</span></span></span><br><span class="line"><span class="function"><span class="params">                   <span class="keyword">boolean</span> evict)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//1、根据key计算hashcode</span></span><br><span class="line">    <span class="keyword">int</span> hash = hash(key);</span><br><span class="line">    <span class="comment">//2、根据hashcode计算index值，找到应该在数组table中存放的下标</span></span><br><span class="line">    <span class="keyword">int</span> index = indexFor(hash);</span><br><span class="line">    <span class="comment">//3、遍历对应下标处的结点所在的链表，将新的结点插入尾部</span></span><br><span class="line">    Node&lt;K,V&gt; e = table[index];</span><br><span class="line">    <span class="keyword">while</span>(e.next!=<span class="keyword">null</span>)&#123;</span><br><span class="line">        e = e.next;</span><br><span class="line">    &#125;</span><br><span class="line">    e.next = <span class="keyword">new</span> Node&lt;K,V&gt;(key,value);</span><br><span class="line">    <span class="comment">/*4、判断，如果目前table的已用大小大于阈值，就进行扩容（threshold = table.length *  DEFAULT_LOAD_FACTOR）</span></span><br><span class="line"><span class="comment">     *static final float DEFAULT_LOAD_FACTOR = 0.75f;</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">if</span> (++size &gt; threshold)</span><br><span class="line">            resize();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-get"><a href="#2-2-get" class="headerlink" title="2.2 get"></a>2.2 get</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> V <span class="title">get</span><span class="params">(Object key)</span> </span>&#123;</span><br><span class="line">        Node&lt;K,V&gt; e;</span><br><span class="line">        <span class="keyword">return</span> (e = getNode(hash(key), key)) == <span class="keyword">null</span> ? <span class="keyword">null</span> : e.value;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">final</span> Node&lt;K,V&gt; <span class="title">getNode</span><span class="params">(<span class="keyword">int</span> hash, Object key)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//1、根据key计算hashcode</span></span><br><span class="line">    <span class="keyword">int</span> hash = hash(key);</span><br><span class="line">    <span class="comment">//2、根据hashcode计算index值，找到应该在数组table中存放的下标</span></span><br><span class="line">    <span class="keyword">int</span> index = indexFor(hash);</span><br><span class="line">    <span class="comment">//3、对该下标对应的结点进行遍历，寻找对应key的结点，是通过key计算出的hashcode来寻找的，所以才会在Node中存放一个hash值</span></span><br><span class="line">     <span class="keyword">do</span> &#123;</span><br><span class="line">     	<span class="keyword">if</span> (e.hash == hash &amp;&amp;</span><br><span class="line">        ((k = e.key) == key || (key != <span class="keyword">null</span> &amp;&amp; key.equals(k))))</span><br><span class="line">        	<span class="keyword">return</span> e;</span><br><span class="line">     &#125; <span class="keyword">while</span> ((e = e.next) != <span class="keyword">null</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-3-indexFor"><a href="#2-3-indexFor" class="headerlink" title="2.3 indexFor"></a>2.3 indexFor</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line">index = hash &amp; (table.length - <span class="number">1</span>);<span class="comment">//相当于取模</span></span><br></pre></td></tr></table></figure>
+
+
+
+<h2 id="3、问题解决"><a href="#3、问题解决" class="headerlink" title="3、问题解决"></a>3、问题解决</h2><ul>
+<li><p>什么是HashMap？</p>
+<p>HashMap就是一个以数组和链表组合构成的数据结构。</p>
+</li>
+<li><p>HashMap的工作原理？</p>
+<p>put时：</p>
+<ul>
+<li>先计算出key对应的hash值</li>
+<li>再通过hash值计算出index</li>
+<li>再找出table数组对应位置的结点进行遍历</li>
+<li>在链表尾部进行插入</li>
+</ul>
+<p>get时：</p>
+<ul>
+<li>先计算出key对应的hash值</li>
+<li>再通过hash值计算出index</li>
+<li>再找出table数组对应位置的结点进行遍历</li>
+<li>返回hash值与查找的hash值相同的结点的value</li>
+</ul>
+</li>
+<li><p>当两个对象的hashcode/index相同时会发生什么？</p>
+<p>会发生hash碰撞，java8以前采用链表解决，java8以后采用红黑树解决。</p>
+</li>
+<li><p>如果HashMap的大小超过了负载因子定义的容量，会怎么做？</p>
+<p>在put方法时会进行扩容，将大小扩大为原来的一倍，并且将之前的结点全部重新分配，减少hash碰撞。</p>
+<p>负载因子为0.75。</p>
+</li>
+<li><p>重新调整HashMap大小存在什么问题吗？</p>
+<p>以前存放的结点就都无法使用了，需要将所有结点重新存放。</p>
+</li>
+<li><p>为什么String，Integer这样的类适合用于作为key？</p>
+<p>因为在存放和取出HashMap中的数据时，都需要计算hashcode，来快速定位，而上面两个类重写了hashcode方法，所以适合。</p>
+<p>同理，如果自定义的类也想作为key，就需要重写hashcode方法。</p>
+</li>
+</ul>
+<h2 id="4、应用"><a href="#4、应用" class="headerlink" title="4、应用"></a>4、应用</h2><p>ThreadLocal，SparseArray等。</p>
+<h1 id="六、java容器总结"><a href="#六、java容器总结" class="headerlink" title="六、java容器总结"></a>六、java容器总结</h1><h2 id="1、集合类图"><a href="#1、集合类图" class="headerlink" title="1、集合类图"></a>1、集合类图</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E9%9B%86%E5%90%88%E7%B1%BB%E5%9B%BE.png" class title="集合类图">
+
+<p>有三个主要的数据结构类：Map，List，Set。</p>
+<p>还有一个工具类：Iterator，Enumeration。</p>
+<h2 id="2、Collection"><a href="#2、Collection" class="headerlink" title="2、Collection"></a>2、Collection</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/collection.png" class title="collection">
+
+<p>List、Set继承于Collection，且都实现了Iterator。</p>
+<h2 id="3、Map"><a href="#3、Map" class="headerlink" title="3、Map"></a>3、Map</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/Map.png" class title="Map">
+
+
+
+<h1 id="七、树"><a href="#七、树" class="headerlink" title="七、树"></a>七、树</h1><h2 id="1、树的基本知识"><a href="#1、树的基本知识" class="headerlink" title="1、树的基本知识"></a>1、树的基本知识</h2><ul>
+<li><p>树的基本要点</p>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E6%A0%91.png" class title="树">
+
+<ul>
+<li><p>结点的度：结点的子树个数</p>
+</li>
+<li><p>树的度：树中所有结点中最大的度</p>
+</li>
+<li><p>叶结点：度为0的结点</p>
+</li>
+<li><p>父结点：有子树的结点是其子树的根结点的父结点</p>
+</li>
+<li><p>子结点：若A是B的父结点，B就是A的子结点</p>
+</li>
+</ul>
+</li>
+<li><p>树与非树</p>
+<ul>
+<li>子树是不相交的</li>
+<li>除了根结点之外，每个结点之有且只有一个父结点</li>
+<li>一个N个结点的树只有N-1条边</li>
+</ul>
+</li>
+<li><p>二叉树</p>
+<ul>
+<li>度为2的树（树中所有结点中最大的度）</li>
+<li>子树有左右顺序之分 </li>
+</ul>
+</li>
+</ul>
+<h2 id="2、哈夫曼树与哈夫曼编码"><a href="#2、哈夫曼树与哈夫曼编码" class="headerlink" title="2、哈夫曼树与哈夫曼编码"></a>2、哈夫曼树与哈夫曼编码</h2><h3 id="2-1-问题"><a href="#2-1-问题" class="headerlink" title="2.1 问题"></a>2.1 问题</h3><p>给定一段字符串，如何对字符串进行编码，可以使得该字符串的编码存储空间最少？</p>
+<table>
+<thead>
+<tr>
+<th><strong>字符</strong></th>
+<th><strong>a</strong></th>
+<th><strong>b</strong></th>
+<th><strong>c</strong></th>
+<th><strong>d</strong></th>
+<th><strong>e</strong></th>
+<th><strong>f</strong></th>
+<th><strong>g</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>频次</td>
+<td>10</td>
+<td>15</td>
+<td>12</td>
+<td>3</td>
+<td>4</td>
+<td>13</td>
+<td>1</td>
+</tr>
+</tbody></table>
+<h3 id="2-2-分析"><a href="#2-2-分析" class="headerlink" title="2.2 分析"></a>2.2 分析</h3><ul>
+<li>用等长ASCII编码：58×8=464位；</li>
+<li>用等长3位编码：58×3=174位；</li>
+<li>不等长编码：出现频次高的字符用的编码短些，出现频次低的编码长些 </li>
+</ul>
+<h3 id="2-3-哈夫曼树（最优二叉树）"><a href="#2-3-哈夫曼树（最优二叉树）" class="headerlink" title="2.3 哈夫曼树（最优二叉树）"></a>2.3 哈夫曼树（最优二叉树）</h3><ul>
+<li>构造一棵二叉树，该树的带权路径长度达到最小，</li>
+<li>称为最优二叉树，也称为哈夫曼树(Huffman Tree)</li>
+</ul>
+<h2 id="3、二叉排序树"><a href="#3、二叉排序树" class="headerlink" title="3、二叉排序树"></a>3、二叉排序树</h2><h3 id="3-1-定义"><a href="#3-1-定义" class="headerlink" title="3.1 定义"></a>3.1 定义</h3><p>定义：一颗二叉树，满足以下属性</p>
+<ul>
+<li>左子树的所有的值小于根节点的值</li>
+<li>右子树的所有的值大于根节点的值</li>
+<li>左、右子树满足以上两点</li>
+</ul>
+<h3 id="3-2-查找"><a href="#3-2-查找" class="headerlink" title="3.2 查找"></a>3.2 查找</h3><p>查找的值X从根节点开始：</p>
+<ul>
+<li>如果X小于根节点值，则在左子树中继续查找</li>
+<li>如果X大于根节点值，则在右子树中继续查找</li>
+<li>如果X值等于根节点值，则返回该节点</li>
+<li>如果都查不到，则返回空Null</li>
+</ul>
+<h3 id="3-3-插入"><a href="#3-3-插入" class="headerlink" title="3.3 插入"></a>3.3 插入</h3><p>插入的值X从根节点开始查找：</p>
+<ul>
+<li>X值小于该节点值，在左子树中继续</li>
+<li>X值大于该节点值，在右子树中继续</li>
+<li>如果节点是叶节点，X值小于该节点值则插入左子节点，否则插入右节点</li>
+</ul>
+<h3 id="3-4-删除"><a href="#3-4-删除" class="headerlink" title="3.4 删除"></a>3.4 删除</h3><p>插入的值X从根节点开始查找：</p>
+<ul>
+<li>如果节点的值等于X，则删除</li>
+<li>X值小于该节点值，在左子树中继续</li>
+<li>X值大于该节点值，在右子树中继续</li>
+</ul>
+<h2 id="4、平衡二叉树"><a href="#4、平衡二叉树" class="headerlink" title="4、平衡二叉树"></a>4、平衡二叉树</h2><h3 id="4-1-定义"><a href="#4-1-定义" class="headerlink" title="4.1 定义"></a>4.1 定义</h3><p>它是一 棵二叉排序树，它的左右两个子树的高度差（平衡因子）的绝对值不超过1，并且左右两个子树都是一棵平衡二叉树。<br>目的：使得树的高度最低，因为树查找的效率决定于树的高度。</p>
+<h3 id="4-2-平衡二叉树的调整"><a href="#4-2-平衡二叉树的调整" class="headerlink" title="4.2 平衡二叉树的调整"></a>4.2 平衡二叉树的调整</h3><p>如果A是一颗平衡二叉树，如果新插入一个元素，会有两个结果：</p>
+<ul>
+<li>平衡没有被打破，不用调整</li>
+<li>平衡被打破，需要调整</li>
+</ul>
+<p>调整原则：根据插入节点与失衡结点的位置关系来划分</p>
+<ul>
+<li><p>LL旋转</p>
+<ul>
+<li>插入节点在失衡结点的左子树的左边</li>
+<li>只需要经过一次左旋即可达到平衡</li>
+</ul>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/LL.png" class title="LL">
+</li>
+<li><p>RR旋转</p>
+<ul>
+<li>插入节点在失衡结点的右子树的右边</li>
+<li>只需要经过一次右旋即可达到平衡</li>
+</ul>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/RR.png" class title="RR">
+</li>
+<li><p>LR旋转</p>
+<ul>
+<li>插入节点在失衡结点的左子树的右边</li>
+<li>失衡结点的左子树先做RR旋转</li>
+<li>失衡结点再做LL旋转也可达到平衡</li>
+</ul>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/LR.png" class title="LR">
+</li>
+<li><p>RL旋转</p>
+<ul>
+<li>插入节点在失衡结点的右子树的左边</li>
+<li>失衡结点的右子树先做LL旋转</li>
+<li>失衡结点再做RR旋转也可达到平衡</li>
+</ul>
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/RL.png" class title="RL">
+
+
+
+</li>
+</ul>
+<h1 id="八、图"><a href="#八、图" class="headerlink" title="八、图"></a>八、图</h1><h2 id="1、图的定义"><a href="#1、图的定义" class="headerlink" title="1、图的定义"></a>1、图的定义</h2><ul>
+<li>图由顶点（vertex）和边（edge）组成的一种结构。</li>
+<li>顶点的集合V，边的集合是E，所以图记为G = （V，E）</li>
+<li>两类信息：顶点信息，边的信息</li>
+</ul>
+<h2 id="2、图的数据存储结构（邻接矩阵）"><a href="#2、图的数据存储结构（邻接矩阵）" class="headerlink" title="2、图的数据存储结构（邻接矩阵）"></a>2、图的数据存储结构（邻接矩阵）</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E6%97%A0%E5%90%91%E5%9B%BE%E9%82%BB%E6%8E%A5%E7%9F%A9%E9%98%B5.png" class title="无向图邻接矩阵">
+
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E6%9C%89%E5%90%91%E5%9B%BE%E9%82%BB%E6%8E%A5%E7%9F%A9%E9%98%B5.png" class title="有向图邻接矩阵">
+
+<img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%B8%A6%E6%9D%83%E6%9C%89%E5%90%91%E5%9B%BE%E9%82%BB%E6%8E%A5%E7%9F%A9%E9%98%B5.png" class title="带权有向图邻接矩阵">
+
+<h2 id="3、图的遍历"><a href="#3、图的遍历" class="headerlink" title="3、图的遍历"></a>3、图的遍历</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%9B%BE.png" class title="图">
+
+<h3 id="3-1-深度优先遍历"><a href="#3-1-深度优先遍历" class="headerlink" title="3.1 深度优先遍历"></a>3.1 深度优先遍历</h3><ul>
+<li>第1步：访问A。 </li>
+<li>第2步：A之后有去向“C,D,F”中的三条路，随意选择一个—-(A的邻接点)C   </li>
+<li>第3步： C之后有去向“B,D”中的两条路，随意选择一个—-(C的邻接点)B </li>
+<li>第4步：B已是尽头，无路可走，于是回溯到上一步的C</li>
+<li>第5步： C之后去向“B”中的路已走过了，现在只有选择D</li>
+<li>第6步：D之后的路通向A，A已访问过，于是回溯到C</li>
+<li>第7步：C的两条路都走过了，不通，继续回溯到A</li>
+<li>第8步：A的（”C,D”）都走过了，不通，只剩下F可走，走到F</li>
+<li>第9步：F有路（”G”）可走，走到G</li>
+</ul>
+<p>访问顺序是： A -&gt; C -&gt; B -&gt; D -&gt; F -&gt; G -&gt; E</p>
+<h3 id="3-2-广度优先遍历"><a href="#3-2-广度优先遍历" class="headerlink" title="3.2 广度优先遍历"></a>3.2 广度优先遍历</h3><ul>
+<li>第1步：访问A</li>
+<li>第2步：访问上一步A的邻接点，有“C,D,F” ，依次访问C,D,F</li>
+<li>第3步： 访问上一步（ C,D,F ）的邻接点，有B，G</li>
+<li>第4步：访问上一步（B,G）的邻接点，有E</li>
+<li>第5步： 访问上一步E的邻接点<br>访问顺序是： A -&gt; C -&gt; D -&gt; F -&gt; B -&gt; G -&gt; E</li>
+</ul>
+<h2 id="4、图的最短路径算法（Dijkstra）"><a href="#4、图的最短路径算法（Dijkstra）" class="headerlink" title="4、图的最短路径算法（Dijkstra）"></a>4、图的最短路径算法（Dijkstra）</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%9B%BE%E8%B7%AF%E5%BE%84.png" class title="图路径">
+
+<ul>
+<li>扫描邻接点，记录邻接点权重值</li>
+<li>找出邻接点里最小的那个值</li>
+</ul>
+<h2 id="5、AOV网络拓补排序"><a href="#5、AOV网络拓补排序" class="headerlink" title="5、AOV网络拓补排序"></a>5、AOV网络拓补排序</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/AOV.png" class title="AOV">
+
+<ul>
+<li>计算出各个节点的入度</li>
+<li>入度为0节点入队</li>
+<li>入队节点的邻接点入度-1</li>
+<li>重复2-3步骤</li>
+<li>拓补序列：AA,A,B,D,G</li>
+</ul>
+<h2 id="6、-关键路径算法"><a href="#6、-关键路径算法" class="headerlink" title="6、 关键路径算法"></a>6、 关键路径算法</h2><img src="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/AOV.png" class title="关键路径">
+
+<p>各节点的最早施工时间：</p>
+<table>
+<thead>
+<tr>
+<th>AA</th>
+<th>A</th>
+<th>B</th>
+<th><strong>D</strong></th>
+<th><strong>G</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>3</td>
+<td>2</td>
+<td>7</td>
+<td>8</td>
+</tr>
+</tbody></table>
+<p>正向推理，出发点到该结点的最长路径就为最早时间。</p>
+<p>各节点的最晚施工时间：</p>
+<table>
+<thead>
+<tr>
+<th>AA</th>
+<th>A</th>
+<th>B</th>
+<th>D</th>
+<th>G</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td>3</td>
+<td>5</td>
+<td>7</td>
+<td>8</td>
+</tr>
+</tbody></table>
+<p>逆向推理，终点返回到该结点的最长路径就是最晚时间。</p>
 ]]></content>
   </entry>
 </search>
