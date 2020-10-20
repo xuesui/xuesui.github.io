@@ -1,6 +1,88 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>View的创建流程</title>
+    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
+    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
+
+<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
+<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
+</li>
+<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
+</li>
+<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
+</li>
+<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
+<ul>
+<li><p>r.mPendingRemoveWindow = r.window</p>
+</li>
+<li><p>r.window = r.activity.getWindow()</p>
+</li>
+<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
+</li>
+<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
+        <span class="keyword">return</span> mWindow;
+    }
+&lt;!--￼<span class="number">0</span>--&gt;
+</code></pre>
+</li>
+</ul>
+<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
+</li>
+<li><p>此时的结构：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
+</li>
+<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
+</li>
+</ul>
+<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
+<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
+</li>
+<li><p>installDecor()，对decor进行一系列操作</p>
+<ul>
+<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
+</li>
+<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
+</li>
+<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
+<ul>
+<li>layoutResource就是传入的布局文件</li>
+<li>mLayoutInflater为布局加载器</li>
+<li>final View root = inflater.inflate(layoutResource, null)</li>
+<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
+<li>通过前两步把布局文件加载为View并且添加进去</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
+</li>
+</ul>
+</li>
+<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
+<ul>
+<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
+<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
+<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
+</ul>
+</li>
+<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
+<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
+</li>
+<li><p>关于inflate的attachToRoot参数的解析</p>
+<ul>
+<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
+<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
+<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
+</ul>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
     <title>RecyclerView回收复用机制</title>
     <url>/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/</url>
     <content><![CDATA[<h1 id="一、复用"><a href="#一、复用" class="headerlink" title="一、复用"></a>一、复用</h1><h2 id="1、滑动时的复用入口"><a href="#1、滑动时的复用入口" class="headerlink" title="1、滑动时的复用入口"></a>1、滑动时的复用入口</h2><h3 id="1-1-获取缓存并复用的流程"><a href="#1-1-获取缓存并复用的流程" class="headerlink" title="1.1 获取缓存并复用的流程"></a>1.1 获取缓存并复用的流程</h3><ul>
@@ -211,6 +293,464 @@
 ]]></content>
   </entry>
   <entry>
+    <title>java虚拟机</title>
+    <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
+    <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
+<p>​    从这里可以得出结论，JVM的作用就是一个翻译官，把字节码文件翻译为机器语言。</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B.png" class title="整体流程">
+
+
+
+<h2 id="1-JVM特性"><a href="#1-JVM特性" class="headerlink" title="1. JVM特性"></a>1. JVM特性</h2><ul>
+<li><p>跨平台</p>
+<p>跨平台体现在Java一份代码能在各种操作系统上运行，这是因为jdk有不同的版本，能处理不同的操作系统。</p>
+</li>
+<li><p>跨语言</p>
+<p>​    跨语言体现在许多其它语言，如kotlin、groovy等都能在JVM上运行，原因是这些语言最终都被编译为字节码，JVM能够识别并处理。</p>
+</li>
+</ul>
+<h2 id="2-运行时数据区"><a href="#2-运行时数据区" class="headerlink" title="2. 运行时数据区"></a>2. 运行时数据区</h2><p>​    运行时数据区内部也分为了五个部分，其中虚拟机栈，程序计数器，本地方法栈为线程私有，即每个线程单独都有一份，而堆和方法区为线程共享，所有线程都可以共享其中的数据。</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E6%97%B6%E6%95%B0%E6%8D%AE%E5%8C%BA.png" class title="运行时数据区">
+
+
+
+<h2 id="3-每个部分详细"><a href="#3-每个部分详细" class="headerlink" title="3.每个部分详细"></a>3.每个部分详细</h2><h3 id="3-1-程序计数器"><a href="#3-1-程序计数器" class="headerlink" title="3.1 程序计数器"></a>3.1 程序计数器</h3><ul>
+<li><p>为什么要有程序计数器？</p>
+<p>​    由于 Java 是多线程语言，当执行的线程数量超过 CPU 核数时，线程之间会根据时间片轮询争夺 CPU 资源。如果一个线程的时间片用完了，或者是其它原因导致这个线程的 CPU 资源被提前抢夺，那么这个退出的线程就需要单独的一个程序计数器，来记录下一条运行的指令。</p>
+<p>​    因为操作系统的时间片轮转机制，方法在运行时可能会因为上下文切换导致中止运行，这时候程序计数器需要记录方法中止时运行到的位置，存下当前字节码指令的地址，在再次开始运行时找到上一次中止运行时的位置。</p>
+</li>
+<li><p>程序计数器是JVM中唯一不会OOM的</p>
+<p>​    因为程序计数器的内存非常小，而一般默认一个虚拟机栈是1M大小，一个虚拟机栈内程序计数器再多也无法达到1M。</p>
+</li>
+</ul>
+<h3 id="3-2-虚拟机栈"><a href="#3-2-虚拟机栈" class="headerlink" title="3.2 虚拟机栈"></a>3.2 虚拟机栈</h3><p>​    虚拟机栈是用于管理一个线程当中的方法的，每有一个方法执行，就会把封装有这个方法信息的栈帧压入虚拟机栈，执行结束后就会把对应栈帧出栈。（就类似于虚拟机栈是一个弹夹，栈帧是子弹）</p>
+<p>​    栈帧结构：</p>
+<ul>
+<li>局部变量表：用于存储八种基本变量类型</li>
+<li>操作数栈：在函数执行过程中存放一些中间变量</li>
+<li>动态链接：一般在java多态时，如一个接口的两个实现类，调用重写的同一个方法，用动态链接去区分调用了哪一个方法</li>
+<li>完成出口：用于存储函数返回值。<strong>（正常返回：程序计数器指向的地址，异常返回：通过异常处理器表确定）</strong></li>
+</ul>
+<h3 id="3-3-本地方法栈"><a href="#3-3-本地方法栈" class="headerlink" title="3.3 本地方法栈"></a>3.3 本地方法栈</h3><p>​    虚拟机栈是管理java方法，而本地方法栈是管理native方法，当JVM调用到native方法时，不会将其打包成栈帧入虚拟机栈，而是利用动态链接将其交给操作系统执行。</p>
+<p>​    <strong>HotSpot直接把本地方法栈和虚拟机栈合二为一</strong></p>
+<h3 id="3-4-方法区"><a href="#3-4-方法区" class="headerlink" title="3.4 方法区"></a>3.4 方法区</h3><p>​    方法区存储<strong>常量、静态变量、类信息、即时编译期编译后的内容</strong>。</p>
+<p>​    java1.8之后，运行时常量池中的<strong>字符串</strong>都被放入堆区。</p>
+<p>​    Java1.8以前：永久代是方法区的一种实现。</p>
+<p>​    java1.8以后：用元空间代替永久代。</p>
+<ul>
+<li><p>缺点：容易发生内存溢出，因为GC时回收率偏低，效率低。</p>
+<p>移除永久代是为了融合 HotSpot JVM 与 JRockit VM 而做出的努力，因为 JRockit 没有永久代，所以不需要配置永久代。</p>
+</li>
+</ul>
+<h3 id="3-5-堆"><a href="#3-5-堆" class="headerlink" title="3.5 堆"></a>3.5 堆</h3><p>​    java中的几乎全部对象，以及数组，都是分配在堆中的，他，他们的引用是存储在局部变量表中。</p>
+<h2 id="4-直接内存（堆外内存）"><a href="#4-直接内存（堆外内存）" class="headerlink" title="4. 直接内存（堆外内存）"></a>4. 直接内存（堆外内存）</h2><p>​    除了JVM的栈和堆以外，还有一个不被JVM管理的内存区域，当使用了NIO时会用到，其大小不受虚拟机大小影响，但是受本机总内存大小限制。</p>
+<h2 id="5-从底层深入理解运行时数据区"><a href="#5-从底层深入理解运行时数据区" class="headerlink" title="5.从底层深入理解运行时数据区"></a>5.从底层深入理解运行时数据区</h2><p>运行如下程序：</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/code.png" class title="code">
+
+<p>JVM处理过程如下：</p>
+<ul>
+<li>JVM 向操作系统申请内存，JVM 第一步就是通过配置参数或者默认配置参数向操作系统申请内存空间</li>
+<li>JVM 获得内存空间后，会根据配置参数分配堆、栈以及方法区的内存大小</li>
+<li>完成上一个步骤后， JVM 首先会执行构造器，编译器会在.java 文件被编译成.class 文件时，收集所有类的初始化代码，包括静态变量赋值语句、静态代码块、静态方法，静态变量和常量放入方法区</li>
+<li>执行方法。启动 main 线程，执行 main 方法，开始执行第一行代码。此时堆内存中会创建一个 Teacher 对象，对象引用 student 就存放在栈中。执行其他方法时，具体的操作：栈帧执行对内存区域的影响</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E8%BF%87%E7%A8%8B.png" class title="运行过程">
+
+
+
+<p><strong>堆中的内存分配是连续的，且栈内存远小于堆内存。</strong></p>
+<h2 id="6-内存溢出"><a href="#6-内存溢出" class="headerlink" title="6. 内存溢出"></a>6. 内存溢出</h2><h3 id="6-1-栈溢出"><a href="#6-1-栈溢出" class="headerlink" title="6.1 栈溢出"></a>6.1 栈溢出</h3><ul>
+<li>stackOverFlow：当栈帧数量过多，加起来大于虚拟机栈的1M内存空间时，报stackOverFlow</li>
+<li>outOfMemory：当线程数量过多，虚拟机栈数量就过多，加起来大于操作系统分配空间时，报OOM。</li>
+</ul>
+<h3 id="6-2-方法区溢出"><a href="#6-2-方法区溢出" class="headerlink" title="6.2 方法区溢出"></a>6.2 方法区溢出</h3><ul>
+<li>运行时常量池溢出</li>
+<li>方法区中保存的Class对象没有被及时回收掉或者Class信息占用的内存超过了我们配置。</li>
+</ul>
+<p>两者都为OOM</p>
+<p><strong><em>注意Class要被回收，条件比较苛刻（仅仅是可以，不代表必然，因为还有一些参数可以进行控制）：</em></strong></p>
+<ul>
+<li><p>该类所有的实例都已经被回收，也就是堆中不存在该类的任何实例</p>
+</li>
+<li><p>加载该类的ClassLoader已经被回收</p>
+</li>
+<li><p>该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法</p>
+</li>
+</ul>
+<h3 id="6-3-堆溢出"><a href="#6-3-堆溢出" class="headerlink" title="6.3 堆溢出"></a>6.3 堆溢出</h3><p>​    当创建对象大小大于堆内存空间，或者创建对象过多，且都为存活对象时，报OOM。</p>
+<h3 id="6-4-本地内存溢出"><a href="#6-4-本地内存溢出" class="headerlink" title="6.4 本地内存溢出"></a>6.4 本地内存溢出</h3><p>​    使用NIO时使用大小超过本地内存，也为OOM。</p>
+<h2 id="7-虚拟机优化技术"><a href="#7-虚拟机优化技术" class="headerlink" title="7. 虚拟机优化技术"></a>7. 虚拟机优化技术</h2><ul>
+<li><p>编译优化——内联函数：将传入参数已经确定的函数直接拆开放入调用位置，避免真实的方法调用</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E8%81%94%E5%87%BD%E6%95%B0.png" class title="内联函数">
+</li>
+<li><p>栈优化——栈帧之间的数据共享：调用方的操作数栈和被调用方的局部变量表共享，减小操作空间的同时也减少了一些复制操作</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%A0%88%E4%BC%98%E5%8C%96.png" class title="栈优化">
+
+</li>
+</ul>
+<h1 id="二、虚拟机中的对象"><a href="#二、虚拟机中的对象" class="headerlink" title="二、虚拟机中的对象"></a>二、虚拟机中的对象</h1><h2 id="1-对象分配"><a href="#1-对象分配" class="headerlink" title="1. 对象分配"></a>1. 对象分配</h2><ul>
+<li>首先通过类加载，传入JVM</li>
+<li>JVM进行对象检查，检查对象是否已经被类加载器加载完毕，如果未加载完毕，就返回到类加载器处重新加载</li>
+<li>检查通过后，就开始内存分配</li>
+<li>内存空间初始化</li>
+<li>设置（设置对象的对象头的一些参数）</li>
+<li>对象初始化（构造函数执行）</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA.png" class title="对象创建">
+
+
+
+<h3 id="1-1-对象的内存布局"><a href="#1-1-对象的内存布局" class="headerlink" title="1.1 对象的内存布局"></a>1.1 对象的内存布局</h3><ul>
+<li>对象头：对象头包含了<strong>Mark Word 、类型指针、对象数组长度</strong>这三个部分。（其中数组长度只有在是数组对象时才会存在）</li>
+<li>实例数据</li>
+<li>对齐填充：作用为将对象大小补齐为字节的倍数，如对象头和实例数据加起来为30位，就需要对齐填充2位</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80.png" class title="对象内存布局">
+
+
+
+<h3 id="1-2-内存分配"><a href="#1-2-内存分配" class="headerlink" title="1.2 内存分配"></a>1.2 内存分配</h3><ul>
+<li><p>划分内存的方法：如堆中内存空间整齐，采用指针碰撞（指针依次向后移动），如不整齐，采用空闲列表，记录每个位置是否已经存放对象</p>
+</li>
+<li><p>并发安全：<strong>CAS机制</strong>，如果有线程在访问，就自旋等待，再次访问时如访问位置不为空闲，就去访问下一个位置。或者采用<strong>本地线程缓存（TLAB）</strong>，在Eden区中划分一个内存大小为Eden百分之一的TLAB区，把每个线程对应的对象数据放入TLAB区，类似于ThreadLocal</p>
+</li>
+<li><p>堆中内存区域：</p>
+<ul>
+<li>新生代：占堆的三分之一大小，又细分为Eden，From，To三个区，内存比例为8：1：1，因为经过大数据调查显示，对象进入Eden区第一次GC，百分之九十都会被回收，而为了避免From或者To内存溢出，只有一半是有效内存</li>
+<li>老年代：占堆的三分之二大小</li>
+<li>新生代和老年代有着各自的垃圾回收器，新生代为Minor GC，老年代为Major GC，或者全局的Full GC</li>
+</ul>
+</li>
+<li><p>具体内存分配过程：</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D.png" class title="内存分配">
+
+<p>(1)优先进行逃逸分析，判断对象是否可以在栈中分配（如对象只存在于一个方法体中，没有其他方法调用，没有其他线程调用，就可以分配在栈中，因为对象会随着栈帧的出栈而回收）。</p>
+<p>(2)无法分配到栈中的对象就送入堆中，如果为大对象，直接存入老年代,如果不为大对象，但是采用了本地线程缓存，就存入TLAB区，如果都不满足，就存入Eden区的其余位置。</p>
+<p>(3)放入Eden区中的对象，在GC时，没有被回收的对象将会放入From区，再次GC还未被回收的对象就送入To区，一直来回存放，目的是避免From区和To区内存溢出，每进行一次GC，就把未回收的对象放入空的区中，将不为空的区全部回收，下一次继续进行这样的操作。存活的对象每进行一次位置转移，就把对象头中的age信息加一，age为四位，最大为15，所以在15次GC后要是对象还存活，就放入老年代。但是有一个例外，JVM为了防止From区和To区内存不足，如果GC时几个对象加起来大小很大，就直接放入老年代，无需等到age达到15，这个称为<strong>对象动态年龄判定</strong>。</p>
+<p>(4)为了保证老年代内存空间不溢出，JVM会在每一次有对象进入老年代时进行一次老年代GC，但是这样做很消耗内存，所以有一个<strong>空间分配担保</strong>，对象放入老年代时先不进行垃圾回收，如果老年代内存不够用了，再进行垃圾回收。还有一种<strong>空间分配担保</strong>，就是当From或者To区放不下时，让对象直接进入老年区。</p>
+</li>
+<li><p>内存分配的规则</p>
+<ul>
+<li>对象优先在Eden区分配</li>
+<li>大对象直接分配到老年代</li>
+<li>空间分配担保</li>
+<li>长期存活对象进入老年代</li>
+<li>对象年龄动态判定</li>
+</ul>
+</li>
+<li><p>优化： 本地线程缓冲（TLAB）</p>
+</li>
+</ul>
+<h3 id="1-3-内存空间初始化"><a href="#1-3-内存空间初始化" class="headerlink" title="1.3 内存空间初始化"></a>1.3 内存空间初始化</h3><p>​    内存分配完成后，虚拟机需要将分配到的内存空间都初始化为零值(如int值为0，boolean值为false等等)。这一步操作保证了对象的实例字段在Java代码中可以不赋初始值就直接使用，程序能访问到这些字段的数据类型所对应的零值。</p>
+<h2 id="2-对象访问定位"><a href="#2-对象访问定位" class="headerlink" title="2. 对象访问定位"></a>2. 对象访问定位</h2><ul>
+<li><p>句柄访问：每个对象的引用持有一个句柄，句柄中存放了到对象实例数据、对象类型数据的指针</p>
+</li>
+<li><p>直接指针访问：每个对象的的引用直接持有对象实例数据，还有对象类型指针</p>
+</li>
+<li><p>对比：</p>
+<p>优点：句柄访问可以在对象实例位置发生改变时不用重新分配引用的指针，直接指针访问可以只进行一次指针访问，速度快，效率高。</p>
+<p>缺点：句柄访问要进行两次指针访问，效率低，速度慢，直接指针访问在对象实例位置发生改变时需要重新定位。</p>
+</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E8%AE%BF%E9%97%AE%E5%AE%9A%E4%BD%8D.png" class title="对象访问定位">
+
+
+
+<h2 id="3-对象存活判断"><a href="#3-对象存活判断" class="headerlink" title="3. 对象存活判断"></a>3. 对象存活判断</h2><ul>
+<li>引用计数算法（无法解决对象互相引用的问题）：JVM维护一个变量，每创建一个对象就加一，回收一个就减一，直到为0就是全部回收完毕</li>
+<li>可达性分析：JVM将一些特别的对象（静态变量、常量池、虚拟机栈中引用的对象、JNI指针等等），定义为GC Root，当持有引用时就建立了关联，只要对象到GC Root之间有一条有关联的道路，就判断为对象存活</li>
+<li>但是不是经历了可达性分析不存活的对象就一定会被回收，在第一次可达性分析要被回收后，会进行一次筛选，如果类内部重写了finalized方法，就会执行一次此方法，可以在这个方法中自行救活对象，但是第二次回收就会直接回收。<strong>注意：finalized方法优先级很低，所以不建议使用</strong></li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%AD%98%E6%B4%BB.png" class title="对象存活">
+
+
+
+<h2 id="4-各种引用"><a href="#4-各种引用" class="headerlink" title="4. 各种引用"></a>4. 各种引用</h2><ul>
+<li><p>强引用：用 = 创建的对象，无论如何都不会被回收</p>
+</li>
+<li><p>软引用（softReference）：在JVM发生OOM时GC才会被回收</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-1.png" class title="软引用-1">
+
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-2.png" class title="软引用-2">
+</li>
+<li><p>弱引用（WeakReference）：在GC时就会回收</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-1.png" class title="弱引用-1">
+
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-2.png" class title="弱引用-2">
+</li>
+<li><p>虚引用：随时都会被回收，唯一作用就是监视垃圾回收器是否正常运行</p>
+</li>
+<li><p><strong><em>注意：</em></strong>软引用和弱引用，可以用在内存资源紧张的情况下以及创建不是很重要的数据缓存。当系统内存不足的时候，缓存中的内容是可以被释放（比如图片缓存）。实际运用（WeakHashMap、ThreadLocal）</p>
+</li>
+</ul>
+<h1 id="三、-垃圾回收器"><a href="#三、-垃圾回收器" class="headerlink" title="三、 垃圾回收器"></a>三、 垃圾回收器</h1><h2 id="1-垃圾回收算法"><a href="#1-垃圾回收算法" class="headerlink" title="1.垃圾回收算法"></a>1.垃圾回收算法</h2><h3 id="1-1-复制算法（Copying）"><a href="#1-1-复制算法（Copying）" class="headerlink" title="1.1 复制算法（Copying）"></a>1.1 复制算法（Copying）</h3><p>​    将可用内存按容量划分为大小相等的两块，每次只使用其中的一块。当这一块的内存用完了，就将还存活着的对象复制到另外一块上面，然后再把已使用过的内存空间一次清理掉。这样使得每次都是对整个半区进行内存回收，内存分配时也就不用考虑内存碎片等复杂情况，只要按顺序分配内存即可，实现简单，运行高效。只是这种算法的代价是将内存缩小为了原来的一半。</p>
+<p>​    专门研究表明，新生代中的对象98%是“朝生夕死”的，所以并不需要按照1:1的比例来划分内存空间，而是将内存分为一块较大的Eden空间和两块较小的Survivor空间，每次使用Eden和其中一块Survivor[1]。当回收时，将Eden和Survivor中还存活着的对象一次性地复制到另外一块Survivor空间上，最后清理掉Eden和刚才用过的Survivor空间。（分代收集理论）</p>
+<p>​    HotSpot虚拟机默认Eden和Survivor的大小比例是8:1，也就是每次新生代中可用内存空间为整个新生代容量的90%（80%+10%），只有10%的内存会被“浪费”。当然，98%的对象可回收只是一般场景下的数据，我们没有办法保证每次回收都只有不多于10%的对象存活，当Survivor空间不够用时，需要依赖其他内存（这里指老年代）进行分配担保（Handle Promotion）</p>
+<h3 id="1-2-标记-清除算法（Mark-Sweep）"><a href="#1-2-标记-清除算法（Mark-Sweep）" class="headerlink" title="1.2 标记-清除算法（Mark-Sweep）"></a>1.2 标记-清除算法（Mark-Sweep）</h3><p>​    算法分为“标记”和“清除”两个阶段：首先标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。它的主要不足空间问题，标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程序运行过程中需要分配较大对象时，无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。</p>
+<h3 id="1-3-标记-整理算法（Mark-Compact）"><a href="#1-3-标记-整理算法（Mark-Compact）" class="headerlink" title="1.3 标记-整理算法（Mark-Compact）"></a>1.3 标记-整理算法（Mark-Compact）</h3><p>​    首先标记出所有需要回收的对象，在标记完成后，后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。标记整理算法虽然没有内存碎片，但是效率偏低。</p>
+<h2 id="2-JVM中常见的垃圾收集器"><a href="#2-JVM中常见的垃圾收集器" class="headerlink" title="2. JVM中常见的垃圾收集器"></a>2. JVM中常见的垃圾收集器</h2><h3 id="2-1-分代收集的思想"><a href="#2-1-分代收集的思想" class="headerlink" title="2.1 分代收集的思想"></a>2.1 分代收集的思想</h3><p>​    在新生代中，每次垃圾收集时都发现有大批对象死去，只有少量存活，那就选用复制算法，只需要付出少量存活对象的复制成本就可以完成收集。</p>
+<p>​    而老年代中因为对象存活率高、没有额外空间对它进行分配担保，就必须使用“标记—清理”或者“标记—整理”算法来进行回收。</p>
+<p>​    <strong>请记住下图的垃圾收集器和之间的连线关系。</strong></p>
+
+
+
+
+<table>
+<thead>
+<tr>
+<th align="center"><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Serial</td>
+<td>新生代，复制算法</td>
+<td>单线程</td>
+<td></td>
+<td>简单高效；适合内存不大的情况；</td>
+</tr>
+<tr>
+<td align="center">ParNew</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>ParNew垃圾收集器是Serial收集器的多线程版本</td>
+<td>搭配CMS垃圾回收器的首选</td>
+</tr>
+<tr>
+<td align="center">Parallel Scavenge吞吐量优先收集器</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>类似ParNew，更加关注吞吐量，达到一个可控制的吞吐量；</td>
+<td>本身是Server级别多CPU机器上的默认GC方式，主要适合后台运算不需要太多交互的任务；</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Serial Old</td>
+<td>老年代，标记整理算法</td>
+<td>单线程</td>
+<td></td>
+<td>Client模式下虚拟机使用</td>
+</tr>
+<tr>
+<td>Parallel Old</td>
+<td>老年代，标记整理算法</td>
+<td>并行的多线程收集器</td>
+<td>Parallel Scavenge收集器的老年代版本，为了配合Parallel Scavenge的面向吞吐量的特性而开发的对应组合；</td>
+<td>在注重吞吐量以及CPU资源敏感的场合采用</td>
+</tr>
+<tr>
+<td>CMS</td>
+<td>老年代，标记清除算法</td>
+<td>并行与并发收集器</td>
+<td>尽可能的缩短垃圾收集时用户线程停止时间；缺点在于： 1.内存碎片 2.需要更多cpu资源 3.浮动垃圾问题，需要更大的堆空间</td>
+<td>重视服务的响应速度、系统停顿时间和用户体验的互联网网站或者B/S系统。互联网后端目前cms是主流的垃圾回收器；</td>
+</tr>
+<tr>
+<td>G1</td>
+<td>跨新生代和老年代；标记整理 + 化整为零</td>
+<td>并行与并发收集器</td>
+<td>JDK1.7才正式引入，采用分区回收的思维，基本不牺牲吞吐量的前提下完成低停顿的内存回收；可预测的停顿是其最大的优势；</td>
+<td>面向服务端应用的垃圾回收器，目标为取代CMS</td>
+</tr>
+</tbody></table>
+<p>并行：垃圾收集的多线程的同时进行。</p>
+<p>并发：垃圾收集的多线程和应用的多线程同时进行。</p>
+<p>注：吞吐量=运行用户代码时间/(运行用户代码时间+ 垃圾收集时间)</p>
+<p>垃圾收集时间= 垃圾回收频率 * 单次垃圾回收时间</p>
+<h3 id="2-2-垃圾回收器工作示意图"><a href="#2-2-垃圾回收器工作示意图" class="headerlink" title="2.2 垃圾回收器工作示意图"></a>2.2 垃圾回收器工作示意图</h3><ul>
+<li><p>Serial/Serial Old</p>
+<p>最古老的，单线程，独占式，成熟，适合单CPU  服务器</p>
+<p>-XX:+UseSerialGC 新生代和老年代都用串行收集器</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+<p>-XX:+UseParallelGC 新生代使用ParallerGC，老年代使用Serial Old</p>
+</li>
+<li><p>ParNew</p>
+<p>和Serial基本没区别，唯一的区别：多线程，多CPU的，停顿时间比Serial少</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+</li>
+<li><p>Parallel Scavenge（ParallerGC）/Parallel Old</p>
+<p>​    关注吞吐量的垃圾收集器，高吞吐量则可以高效率地利用CPU时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务。</p>
+<p>​    所谓吞吐量就是CPU用于运行用户代码的时间与CPU总消耗时间的比值，即吞吐量=运行用户代码时间/（运行用户代码时间+垃圾收集时间），虚拟机总共运行了100分钟，其中垃圾收集花掉1分钟，那吞吐量就是99%。</p>
+</li>
+<li><p>Concurrent Mark Sweep （CMS）</p>
+ 
+
+<p>​    CMS收集器是一种以获取<strong>最短回收停顿时间</strong>为目标的收集器。目前很大一部分的Java应用集中在互联网站或者B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿时间最短，以给用户带来较好的体验。CMS收集器就非常符合这类应用的需求。</p>
+<p>​    从名字（包含“Mark Sweep”）上就可以看出，CMS收集器是基于<strong>“标记—清除”算法</strong>实现的，它的运作过程相对于前面几种收集器来说更复杂一些，整个过程分为4个步骤，包括：</p>
+<p><strong>l</strong> <strong><em>初始标记</em></strong>——短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快</p>
+<p><strong>l</strong> <strong><em>并发标记</em></strong>——长，和用户的应用程序同时进行，进行GC Roots追踪的过程</p>
+<p><strong>l</strong> <strong><em>重新标记</em></strong>——短暂，为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短</p>
+<p><strong>l</strong> <strong><em>并发清除</em></strong>——长，清除掉标记的对象</p>
+<p><strong>l 优点：</strong></p>
+<p>​    由于整个过程中耗时最长的并发标记和并发清除过程收集器线程都可以与用户线程一起工作，所以，从总体上来说，CMS收集器的内存回收过程是与用户线程一起并发执行的，用户体验好。</p>
+<p>-XX:+UseConcMarkSweepGC ，表示新生代使用ParNew，老年代的用CMS</p>
+<p><strong>l 缺点：</strong></p>
+<ul>
+<li><p>浮动垃圾</p>
+<p>​    由于CMS并发清理阶段用户线程还在运行着，伴随程序运行自然就还会有新的垃圾不断产生，这一部分垃圾出现在标记过程之后，CMS无法在当次收集中处理掉它们，只好留待下一次GC时再清理掉。这一部分垃圾就称为“浮动垃圾”。</p>
+<p>​    为了防止浮动垃圾导致OOM，每次在老年代内存被占了80%时就会进行GC，如果还是OOM了，就让Serial Old 进行处理，这是STW会特别多，影响用户体验。</p>
+</li>
+<li><p>内存碎片</p>
+<p>因为CMS采用的是标记——清除算法，所以会存在内存碎片，导致GC提前进行。</p>
+</li>
+<li><p>CPU敏感：CPU小于4时影响性能</p>
+</li>
+</ul>
+</li>
+<li><p>G1</p>
+  
+
+<p>-XX:+UseG1GC</p>
+<ul>
+<li><p>并发标记周期</p>
+<ul>
+<li><p>初始标记</p>
+<p>​    短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，产生一个全局停顿，都伴随有一次新生代的GC。</p>
+</li>
+<li><p>根区域扫描</p>
+<p>扫描survivor区可以直接到达的老年代区域。</p>
+</li>
+<li><p>并发标记阶段</p>
+<p>扫描和查找整个堆的存活对象，并标记。</p>
+</li>
+<li><p>重新标记</p>
+<p>会产生全局停顿，对并发标记阶段的结果进行修正。</p>
+</li>
+<li><p>独占清理</p>
+<p>会产生全局停顿，对GC回收比例进行排序，供混合收集阶段使用。</p>
+</li>
+<li><p>并发清理</p>
+<p>识别并清理完全空闲的区域，并发进行。</p>
+</li>
+</ul>
+</li>
+<li><p>并行与并发</p>
+<p>​    G1能充分利用多CPU、多核环境下的硬件优势，使用多个CPU（CPU或者CPU核心）来缩短Stop-The-World停顿的时间，部分其他收集器原本需要停顿Java线程执行的GC动作，G1收集器仍然可以通过并发的方式让Java程序继续执行。</p>
+</li>
+<li><p>分代收集</p>
+<p>​    与其他收集器一样，分代概念在G1中依然得以保留。虽然G1可以不需要其他收集器配合就能独立管理整个GC堆，但它能够采用不同的方式去处理新创建的对象和已经存活了一段时间、熬过多次GC的旧对象以获取更好的收集效果。</p>
+
+</li>
+<li><p>空间整合</p>
+<p>​    与CMS的“标记—清理”算法不同，G1从整体来看是基于“标记—整理”算法实现的收集器，从局部（两个Region之间）上来看是基于“复制”算法实现的，但无论如何，这两种算法都意味着G1运作期间不会产生内存空间碎片，收集后能提供规整的可用内存。这种特性有利于程序长时间运行，分配大对象时不会因为无法找到连续内存空间而提前触发下一次GC。</p>
+</li>
+<li><p>内存布局</p>
+<p>​    在G1之前的其他收集器进行收集的范围都是整个新生代或者老年代，而G1不再是这样。使用G1收集器时，Java堆的内存布局就与其他收集器有很大差别，它将整个Java堆划分为多个大小相等的独立区域（Region），虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔离的了，它们都是一部分Region（不需要连续）的集合。</p>
+</li>
+<li><p>混合收集</p>
+<ul>
+<li><p>对含有垃圾比例较高的Region进行回收。</p>
+</li>
+<li><p>G1当出现内存不足的的情况，也可能进行的FullGC回收。</p>
+</li>
+<li><p>G1中重要的参数：</p>
+<p>-XX:MaxGCPauseMillis 指定目标的最大停顿时间，G1尝试调整新生代和老年代的比例，堆大小，晋升年龄来达到这个目标时间。</p>
+<p>-XX:ParallerGCThreads：设置GC的工作线程数量</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-Stop-The-World现象"><a href="#3-Stop-The-World现象" class="headerlink" title="3. Stop The World现象"></a>3. Stop The World现象</h2><p>STW就是暂停用户线程。</p>
+<p>GC收集器和我们GC调优的目标就是尽可能的减少STW的时间和次数。</p>
+<h2 id="4-未来的垃圾回收"><a href="#4-未来的垃圾回收" class="headerlink" title="4. 未来的垃圾回收"></a>4. 未来的垃圾回收</h2><p>​    ZGC通过技术手段把stw的情况控制在仅有一次，就是第一次的初始标记才会发生，这样也就不难理解为什么GC停顿时间不随着堆增大而上升了，再大我也是通过并发的时间去回收了。</p>
+<p>​    关键技术：</p>
+<p>​    <strong>1.</strong> <strong><em>有色指针（Colored Pointers）</em></strong></p>
+<p>​    <strong>2.</strong> <strong><em>加载屏障（Load Barrier）</em></strong></p>
+<h2 id="5-常量池与String"><a href="#5-常量池与String" class="headerlink" title="5. 常量池与String"></a>5. 常量池与String</h2><p>​    常量池有很多概念，包括运行时常量池、class常量池、字符串常量池。</p>
+<p>​    虚拟机规范只规定以上区域属于方法区，并没有规定虚拟机厂商的实现。</p>
+<p>​    严格来说是静态常量池和运行时常量池，静态常量池是存放字符串字面量、符号引用以及类和方法的信息，而运行时常量池存放的是运行时一些直接引用。<br>​    运行时常量池是在类加载完成之后，将静态常量池中的符号引用值转存到运行时常量池中，类在解析之后，将符号引用替换成直接引用。<br>​    这两个常量池在JDK1.7版本之后，就移到堆内存中了，这里指的是物理空间，而逻辑上还是属于方法区（方法区是逻辑分区）。</p>
+<ul>
+<li><p>字面量</p>
+<p>给基本类型变量赋值的方式就叫做字面量或者字面值。</p>
+<p>比如：int i=120; long j=10L;</p>
+</li>
+<li><p>符号引用</p>
+<p>​    包括类和方法的全限定名（例如 String 这个类，它的全限定名就是 Java/lang/String）、字段的名称和描述符以及方法的名称和描述符。</p>
+</li>
+<li><p>直接引用</p>
+<p>具体对象的索引值。</p>
+</li>
+<li><p>String的初始赋值</p>
+ 
+
+<pre><code>而如果调用了insern方法，就是直接在字符串常量池中找字符串，如果没有再创建，返回的是字符串常量池的引用。</code></pre></li>
+</ul>
+<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1><h2 id="1-ART和Dalvik"><a href="#1-ART和Dalvik" class="headerlink" title="1. ART和Dalvik"></a>1. ART和Dalvik</h2><p>​    Android应用程序运行在Dalvik/ART虚拟机，并且每一个应用程序对应有一个单独的Dalvik虚拟机实例。Dalvik虚拟机实则也算是一个Java虚拟机，只不过它执行的不是class文件，而是dex文件。</p>
+<p>​    Dalvik虚拟机与Java虚拟机共享有差不多的特性，差别在于两者执行的指令集是不一样的，前者的指令集是基本寄存器的，而后者的指令集是基于堆栈的。</p>
+
+
+
+
+<ul>
+<li><p>基于寄存器的虚拟机：</p>
+<p>​    相当于把基于堆栈的虚拟机的局部变量表和操作数栈合并为了一个虚拟寄存器，模仿CPU寄存器操作，将指令运行步骤大大减少。</p>
+</li>
+</ul>
+<p>​    （1）Dalvik虚拟机执行的是dex字节码，是解释执行，在Android2.2后，加入了JIT（即时编译技术），在运行时可以选择经常执行的代码进行编译优化，在本次程序执行完毕后会清除记录。</p>
+<p>​    （2）在Android5.0后，默认使用ART虚拟机，直接执行本地机器码，而把dex字节码编译成机器码的东西就是AOT（预先编译技术），在程序安装时进行预编译，将应用直接编译为机器码，但是这样的弊端就是安装会非常慢。</p>
+<p>​    （3）在安装时，dalvik将.dex文件优化为.odex文件，ART将.dex文件优化为机器码文件。</p>
+<p>​    （4）Android N ：混合编译，在第一次安装时不执行AOT（安装速度变快），在运行的同时进行JIT，将经常运行的代码进行编译，并保存到Profile文件下。在手机充电或者闲置时，通过AOT技术将Profile文件下的代码进行编译，保存机器码，下次运行时直接使用。</p>
+<h2 id="2-Android类加载器"><a href="#2-Android类加载器" class="headerlink" title="2. Android类加载器"></a>2. Android类加载器</h2>
+
+<p>全局getClassLoader获取到的就是PathClassLoader</p>
+<p>​    类加载过程：</p>
+<ul>
+<li><p>loadClass</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="keyword">boolean</span> resolve)                         <span class="keyword">throws</span> ClassNotFoundException</span><br><span class="line">    &#123;</span><br><span class="line">    Class&lt;?&gt; c = findLoadedClass(name);<span class="comment">//寻找是否已经加载</span></span><br><span class="line">    <span class="keyword">if</span>(c == <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="comment">//如果没有加载，首先找父加载器，这里的父加载器是BootClassLoader</span></span><br><span class="line">        c = parent.loadClass(name, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">        	<span class="comment">//如果还是未加载，就使用自己的类加载器进行加载</span></span><br><span class="line">        	c = findClass(name);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里采用的是双亲委派模型，先让父加载器加载，再让自己加载。</p>
+<p>原因：</p>
+<ul>
+<li>安全性：无法恶意篡改系统已有的类，因为会被BootClassLoader直接加载，加载的是系统层的类</li>
+<li>避免重复加载</li>
+</ul>
+</li>
+<li><p>findLoadedClass 调用的是VMClassLoader类里的方法，直接是native层</p>
+</li>
+<li><p>parent.loadClass</p>
+<p>调用到BaseDexClassLoader的findClass方法。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException&#123;</span><br><span class="line">    Class c = pathList.findClass(name, suppressedExceptions);</span><br><span class="line">    <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而pathList是一个DexPathList对象。</p>
+<p>在pathList中又有一个element数组用于存放多个dex文件。</p>
+<p>最后遍历编译。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"> <span class="keyword">private</span> Element[] dexElements;</span><br><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">     <span class="keyword">for</span> (Element element : dexElements) &#123;</span><br><span class="line">            Class&lt;?&gt; clazz = element.findClass(name, definingContext, suppressed);</span><br><span class="line">            <span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> clazz;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, ClassLoader definingContext,</span><br><span class="line">                List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">            <span class="keyword">return</span> dexFile != <span class="keyword">null</span> ? dexFile.loadClassBinaryName(name, definingContext, suppressed)</span><br><span class="line">                    : <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
+
+<p>直接loadClassBinaryName把dex文件编译加载好。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> Element[] makeDexElements(List&lt;File&gt; files, File optimizedDirectory,</span><br><span class="line">           List&lt;IOException&gt; suppressedExceptions, ClassLoader loader, <span class="keyword">boolean</span> isTrusted)</span><br></pre></td></tr></table></figure>
+
+<p>通过这个方法把element数组初始化，在热修复时也可以通过这个方法，把dex文件构造成element数组，放在pathList中dexElements的最前面。</p>
+</li>
+</ul>
+  
+
+<ul>
+<li><p>findClass</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException &#123;</span><br><span class="line">       <span class="keyword">return</span> Class.classForName(name, <span class="keyword">false</span>, <span class="keyword">null</span>);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>直接寻找类名并加载。</p>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
     <title>事件分发二级联动</title>
     <url>/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/</url>
     <content><![CDATA[<h2 id="1-事件分发流程"><a href="#1-事件分发流程" class="headerlink" title="1 事件分发流程"></a>1 事件分发流程</h2><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%872.png" class title="分发流程">
@@ -390,91 +930,112 @@
 ]]></content>
   </entry>
   <entry>
-    <title>View的创建流程</title>
-    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
-    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
-
-<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
-<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
-</li>
-<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
-</li>
-<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
-</li>
-<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
-<ul>
-<li><p>r.mPendingRemoveWindow = r.window</p>
-</li>
-<li><p>r.window = r.activity.getWindow()</p>
-</li>
-<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
-</li>
-<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
-        <span class="keyword">return</span> mWindow;
-    }
-&lt;!--￼<span class="number">0</span>--&gt;
-</code></pre>
-</li>
-</ul>
-<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
-</li>
-<li><p>此时的结构：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
-</li>
-<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
-</li>
-</ul>
-<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
-<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
-</li>
-<li><p>installDecor()，对decor进行一系列操作</p>
-<ul>
-<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
-</li>
-<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
-</li>
-<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
-<ul>
-<li>layoutResource就是传入的布局文件</li>
-<li>mLayoutInflater为布局加载器</li>
-<li>final View root = inflater.inflate(layoutResource, null)</li>
-<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
-<li>通过前两步把布局文件加载为View并且添加进去</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
-</li>
-</ul>
-</li>
-<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
-<ul>
-<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
-<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
-<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
-</ul>
-</li>
-<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
-<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
-</li>
-<li><p>关于inflate的attachToRoot参数的解析</p>
-<ul>
-<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
-<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
-<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
-</ul>
-</li>
-</ul>
-]]></content>
-  </entry>
-  <entry>
     <title>插件化换肤</title>
     <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
     <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
+  </entry>
+  <entry>
+    <title>自定义View</title>
+    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
+    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
+<ul>
+<li>布局：onMeasure , onLayout</li>
+<li>绘制: onDraw</li>
+<li>事件分发：onTouchEvent</li>
+</ul>
+<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
+<li>View类型：实现OnMeasure和OnDraw</li>
+<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
+</ul>
+<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
+<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
+<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
+<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
+</ol>
+<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
+<li><p>Android坐标系</p>
+<p>(1)以左上角为坐标原点</p>
+<p>(2)向右为x轴正方向，向下为y轴正方向</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
+</li>
+<li><p>View位置坐标系</p>
+<ul>
+<li><p>Top：子View上边界到父view上边界的距离</p>
+</li>
+<li><p>Left：子View左边界到父view左边界的距离</p>
+</li>
+<li><p>Bottom：子View下边距到父View上边界的距离</p>
+</li>
+<li><p>Right：子View右边界到父view左边界的距离</p>
+</li>
+</ul>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
+</li>
+<li><p>获取位置的方法</p>
+<ul>
+<li>调用get方法获取相对于父View的距离</li>
+<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
+</ul>
+</li>
+</ul>
+<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
+
+<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
+
+
+
+<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
+<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
+</li>
+<li><p>其中mode类型包括：</p>
+<ul>
+<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
+<li>EXACTLY：确切的大小，如：100dp</li>
+<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
+</ul>
+</li>
+</ul>
+<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
+<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
+<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
+<ul>
+<li><p>原理</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
+
+
+
+</li>
+</ul>
+<p>  通俗易懂的一个例子：</p>
+  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
+
+<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
+<li><p>先度量孩子</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<ul>
+<li><p>再度量自己</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
+
+<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
+</li>
+</ul>
+<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
+
+<p>调用layout方法进行布局</p>
+<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
+<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
+<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
+]]></content>
   </entry>
   <entry>
     <title>数据结构与算法</title>
@@ -1151,567 +1712,6 @@
 <p>接下来就是代码实现:</p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//第一步构造next表</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] buildNext(String p)&#123;</span><br><span class="line">        <span class="comment">//构建next表就是查找真前缀 == 真后缀的最大长度，以获取模式串尽量多地往右移动</span></span><br><span class="line">        <span class="keyword">int</span>[] N = <span class="keyword">new</span> <span class="keyword">int</span>[p.length()];</span><br><span class="line">        <span class="keyword">int</span> m = p.length(),j = <span class="number">0</span>;<span class="comment">//主串位置</span></span><br><span class="line">        <span class="keyword">int</span> t = N[<span class="number">0</span>] = -<span class="number">1</span>;<span class="comment">//字串位置</span></span><br><span class="line">        <span class="keyword">while</span>(j &lt; m -<span class="number">1</span>)&#123;</span><br><span class="line">            <span class="keyword">if</span>(t &lt; <span class="number">0</span> || p.charAt(j) == p.charAt(t))&#123;</span><br><span class="line">                j++;t++;</span><br><span class="line">                N[j] = t;</span><br><span class="line">            &#125;<span class="keyword">else</span>&#123;<span class="comment">//失配</span></span><br><span class="line">                t = N[t];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> N;</span><br><span class="line">    &#125;</span><br><span class="line"><span class="comment">//第二步利用next表尽量多地往右移动</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">kmp</span><span class="params">(String s, String p)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span>[] next = buildNext(p);<span class="comment">// 调用next（String p）方法</span></span><br><span class="line">        <span class="keyword">int</span> index = -<span class="number">1</span>;<span class="comment">// 成功匹配的位置</span></span><br><span class="line">        <span class="keyword">int</span> sLength = s.length();<span class="comment">// 主串长度</span></span><br><span class="line">        <span class="keyword">int</span> pLength = p.length();<span class="comment">// 子串长度</span></span><br><span class="line">        <span class="keyword">if</span> (sLength &lt; pLength) &#123;</span><br><span class="line">            System.out.println(<span class="string">"Error.The main string is greater than the sub string length."</span>);</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">int</span> i = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">int</span> j = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">while</span> (i &lt; sLength &amp;&amp; j &lt; pLength) &#123;</span><br><span class="line">            <span class="comment">/*</span></span><br><span class="line"><span class="comment">             * 如果j = -1， 或者当前字符匹配成功（即s.charAt(i) == p.charAt(j)）， 都令i++，j++</span></span><br><span class="line"><span class="comment">             * 这两个条件能否交换次序？</span></span><br><span class="line"><span class="comment">             */</span></span><br><span class="line">            <span class="keyword">if</span> (j == -<span class="number">1</span> || s.charAt(i) == p.charAt(j)) &#123;</span><br><span class="line">                i++;</span><br><span class="line">                j++;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">/*</span></span><br><span class="line"><span class="comment">                 * 如果j != -1，且当前字符匹配失败， 则令 i 不变，j = next[j], next[j]即为j所对应的next值</span></span><br><span class="line"><span class="comment">                 */</span></span><br><span class="line">                j = next[j];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (j &gt;= pLength) &#123;<span class="comment">// 匹配成功</span></span><br><span class="line">            index = i - j;</span><br><span class="line">            System.out.println(<span class="string">"Successful match,index is:"</span> + index);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;<span class="comment">// 匹配失败</span></span><br><span class="line">            System.out.println(<span class="string">"Match failed."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
 
-]]></content>
-  </entry>
-  <entry>
-    <title>自定义View</title>
-    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
-    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
-<ul>
-<li>布局：onMeasure , onLayout</li>
-<li>绘制: onDraw</li>
-<li>事件分发：onTouchEvent</li>
-</ul>
-<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
-<li>View类型：实现OnMeasure和OnDraw</li>
-<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
-</ul>
-<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
-<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
-<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
-<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
-</ol>
-<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
-<li><p>Android坐标系</p>
-<p>(1)以左上角为坐标原点</p>
-<p>(2)向右为x轴正方向，向下为y轴正方向</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
-</li>
-<li><p>View位置坐标系</p>
-<ul>
-<li><p>Top：子View上边界到父view上边界的距离</p>
-</li>
-<li><p>Left：子View左边界到父view左边界的距离</p>
-</li>
-<li><p>Bottom：子View下边距到父View上边界的距离</p>
-</li>
-<li><p>Right：子View右边界到父view左边界的距离</p>
-</li>
-</ul>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
-</li>
-<li><p>获取位置的方法</p>
-<ul>
-<li>调用get方法获取相对于父View的距离</li>
-<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
-</ul>
-</li>
-</ul>
-<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
-
-<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
-
-
-
-<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
-<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
-</li>
-<li><p>其中mode类型包括：</p>
-<ul>
-<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
-<li>EXACTLY：确切的大小，如：100dp</li>
-<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
-</ul>
-</li>
-</ul>
-<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
-<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
-<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
-<ul>
-<li><p>原理</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
-
-
-
-</li>
-</ul>
-<p>  通俗易懂的一个例子：</p>
-  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
-
-<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
-<li><p>先度量孩子</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
-
-
-
-</li>
-</ul>
-<ul>
-<li><p>再度量自己</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
-
-<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
-</li>
-</ul>
-<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
-
-<p>调用layout方法进行布局</p>
-<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
-<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
-<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
-]]></content>
-  </entry>
-  <entry>
-    <title>java虚拟机</title>
-    <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
-    <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
-<p>​    从这里可以得出结论，JVM的作用就是一个翻译官，把字节码文件翻译为机器语言。</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B.png" class title="整体流程">
-
-
-
-<h2 id="1-JVM特性"><a href="#1-JVM特性" class="headerlink" title="1. JVM特性"></a>1. JVM特性</h2><ul>
-<li><p>跨平台</p>
-<p>跨平台体现在Java一份代码能在各种操作系统上运行，这是因为jdk有不同的版本，能处理不同的操作系统。</p>
-</li>
-<li><p>跨语言</p>
-<p>​    跨语言体现在许多其它语言，如kotlin、groovy等都能在JVM上运行，原因是这些语言最终都被编译为字节码，JVM能够识别并处理。</p>
-</li>
-</ul>
-<h2 id="2-运行时数据区"><a href="#2-运行时数据区" class="headerlink" title="2. 运行时数据区"></a>2. 运行时数据区</h2><p>​    运行时数据区内部也分为了五个部分，其中虚拟机栈，程序计数器，本地方法栈为线程私有，即每个线程单独都有一份，而堆和方法区为线程共享，所有线程都可以共享其中的数据。</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E6%97%B6%E6%95%B0%E6%8D%AE%E5%8C%BA.png" class title="运行时数据区">
-
-
-
-<h2 id="3-每个部分详细"><a href="#3-每个部分详细" class="headerlink" title="3.每个部分详细"></a>3.每个部分详细</h2><h3 id="3-1-程序计数器"><a href="#3-1-程序计数器" class="headerlink" title="3.1 程序计数器"></a>3.1 程序计数器</h3><ul>
-<li><p>为什么要有程序计数器？</p>
-<p>​    由于 Java 是多线程语言，当执行的线程数量超过 CPU 核数时，线程之间会根据时间片轮询争夺 CPU 资源。如果一个线程的时间片用完了，或者是其它原因导致这个线程的 CPU 资源被提前抢夺，那么这个退出的线程就需要单独的一个程序计数器，来记录下一条运行的指令。</p>
-<p>​    因为操作系统的时间片轮转机制，方法在运行时可能会因为上下文切换导致中止运行，这时候程序计数器需要记录方法中止时运行到的位置，存下当前字节码指令的地址，在再次开始运行时找到上一次中止运行时的位置。</p>
-</li>
-<li><p>程序计数器是JVM中唯一不会OOM的</p>
-<p>​    因为程序计数器的内存非常小，而一般默认一个虚拟机栈是1M大小，一个虚拟机栈内程序计数器再多也无法达到1M。</p>
-</li>
-</ul>
-<h3 id="3-2-虚拟机栈"><a href="#3-2-虚拟机栈" class="headerlink" title="3.2 虚拟机栈"></a>3.2 虚拟机栈</h3><p>​    虚拟机栈是用于管理一个线程当中的方法的，每有一个方法执行，就会把封装有这个方法信息的栈帧压入虚拟机栈，执行结束后就会把对应栈帧出栈。（就类似于虚拟机栈是一个弹夹，栈帧是子弹）</p>
-<p>​    栈帧结构：</p>
-<ul>
-<li>局部变量表：用于存储八种基本变量类型</li>
-<li>操作数栈：在函数执行过程中存放一些中间变量</li>
-<li>动态链接：一般在java多态时，如一个接口的两个实现类，调用重写的同一个方法，用动态链接去区分调用了哪一个方法</li>
-<li>完成出口：用于存储函数返回值。<strong>（正常返回：程序计数器指向的地址，异常返回：通过异常处理器表确定）</strong></li>
-</ul>
-<h3 id="3-3-本地方法栈"><a href="#3-3-本地方法栈" class="headerlink" title="3.3 本地方法栈"></a>3.3 本地方法栈</h3><p>​    虚拟机栈是管理java方法，而本地方法栈是管理native方法，当JVM调用到native方法时，不会将其打包成栈帧入虚拟机栈，而是利用动态链接将其交给操作系统执行。</p>
-<p>​    <strong>HotSpot直接把本地方法栈和虚拟机栈合二为一</strong></p>
-<h3 id="3-4-方法区"><a href="#3-4-方法区" class="headerlink" title="3.4 方法区"></a>3.4 方法区</h3><p>​    方法区存储<strong>常量、静态变量、类信息、即时编译期编译后的内容</strong>。</p>
-<p>​    java1.8之后，运行时常量池中的<strong>字符串</strong>都被放入堆区。</p>
-<p>​    Java1.8以前：永久代是方法区的一种实现。</p>
-<p>​    java1.8以后：用元空间代替永久代。</p>
-<ul>
-<li><p>缺点：容易发生内存溢出，因为GC时回收率偏低，效率低。</p>
-<p>移除永久代是为了融合 HotSpot JVM 与 JRockit VM 而做出的努力，因为 JRockit 没有永久代，所以不需要配置永久代。</p>
-</li>
-</ul>
-<h3 id="3-5-堆"><a href="#3-5-堆" class="headerlink" title="3.5 堆"></a>3.5 堆</h3><p>​    java中的几乎全部对象，以及数组，都是分配在堆中的，他，他们的引用是存储在局部变量表中。</p>
-<h2 id="4-直接内存（堆外内存）"><a href="#4-直接内存（堆外内存）" class="headerlink" title="4. 直接内存（堆外内存）"></a>4. 直接内存（堆外内存）</h2><p>​    除了JVM的栈和堆以外，还有一个不被JVM管理的内存区域，当使用了NIO时会用到，其大小不受虚拟机大小影响，但是受本机总内存大小限制。</p>
-<h2 id="5-从底层深入理解运行时数据区"><a href="#5-从底层深入理解运行时数据区" class="headerlink" title="5.从底层深入理解运行时数据区"></a>5.从底层深入理解运行时数据区</h2><p>运行如下程序：</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/code.png" class title="code">
-
-<p>JVM处理过程如下：</p>
-<ul>
-<li>JVM 向操作系统申请内存，JVM 第一步就是通过配置参数或者默认配置参数向操作系统申请内存空间</li>
-<li>JVM 获得内存空间后，会根据配置参数分配堆、栈以及方法区的内存大小</li>
-<li>完成上一个步骤后， JVM 首先会执行构造器，编译器会在.java 文件被编译成.class 文件时，收集所有类的初始化代码，包括静态变量赋值语句、静态代码块、静态方法，静态变量和常量放入方法区</li>
-<li>执行方法。启动 main 线程，执行 main 方法，开始执行第一行代码。此时堆内存中会创建一个 Teacher 对象，对象引用 student 就存放在栈中。执行其他方法时，具体的操作：栈帧执行对内存区域的影响</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E8%BF%87%E7%A8%8B.png" class title="运行过程">
-
-
-
-<p><strong>堆中的内存分配是连续的，且栈内存远小于堆内存。</strong></p>
-<h2 id="6-内存溢出"><a href="#6-内存溢出" class="headerlink" title="6. 内存溢出"></a>6. 内存溢出</h2><h3 id="6-1-栈溢出"><a href="#6-1-栈溢出" class="headerlink" title="6.1 栈溢出"></a>6.1 栈溢出</h3><ul>
-<li>stackOverFlow：当栈帧数量过多，加起来大于虚拟机栈的1M内存空间时，报stackOverFlow</li>
-<li>outOfMemory：当线程数量过多，虚拟机栈数量就过多，加起来大于操作系统分配空间时，报OOM。</li>
-</ul>
-<h3 id="6-2-方法区溢出"><a href="#6-2-方法区溢出" class="headerlink" title="6.2 方法区溢出"></a>6.2 方法区溢出</h3><ul>
-<li>运行时常量池溢出</li>
-<li>方法区中保存的Class对象没有被及时回收掉或者Class信息占用的内存超过了我们配置。</li>
-</ul>
-<p>两者都为OOM</p>
-<p><strong><em>注意Class要被回收，条件比较苛刻（仅仅是可以，不代表必然，因为还有一些参数可以进行控制）：</em></strong></p>
-<ul>
-<li><p>该类所有的实例都已经被回收，也就是堆中不存在该类的任何实例</p>
-</li>
-<li><p>加载该类的ClassLoader已经被回收</p>
-</li>
-<li><p>该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法</p>
-</li>
-</ul>
-<h3 id="6-3-堆溢出"><a href="#6-3-堆溢出" class="headerlink" title="6.3 堆溢出"></a>6.3 堆溢出</h3><p>​    当创建对象大小大于堆内存空间，或者创建对象过多，且都为存活对象时，报OOM。</p>
-<h3 id="6-4-本地内存溢出"><a href="#6-4-本地内存溢出" class="headerlink" title="6.4 本地内存溢出"></a>6.4 本地内存溢出</h3><p>​    使用NIO时使用大小超过本地内存，也为OOM。</p>
-<h2 id="7-虚拟机优化技术"><a href="#7-虚拟机优化技术" class="headerlink" title="7. 虚拟机优化技术"></a>7. 虚拟机优化技术</h2><ul>
-<li><p>编译优化——内联函数：将传入参数已经确定的函数直接拆开放入调用位置，避免真实的方法调用</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E8%81%94%E5%87%BD%E6%95%B0.png" class title="内联函数">
-</li>
-<li><p>栈优化——栈帧之间的数据共享：调用方的操作数栈和被调用方的局部变量表共享，减小操作空间的同时也减少了一些复制操作</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%A0%88%E4%BC%98%E5%8C%96.png" class title="栈优化">
-
-</li>
-</ul>
-<h1 id="二、虚拟机中的对象"><a href="#二、虚拟机中的对象" class="headerlink" title="二、虚拟机中的对象"></a>二、虚拟机中的对象</h1><h2 id="1-对象分配"><a href="#1-对象分配" class="headerlink" title="1. 对象分配"></a>1. 对象分配</h2><ul>
-<li>首先通过类加载，传入JVM</li>
-<li>JVM进行对象检查，检查对象是否已经被类加载器加载完毕，如果未加载完毕，就返回到类加载器处重新加载</li>
-<li>检查通过后，就开始内存分配</li>
-<li>内存空间初始化</li>
-<li>设置（设置对象的对象头的一些参数）</li>
-<li>对象初始化（构造函数执行）</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA.png" class title="对象创建">
-
-
-
-<h3 id="1-1-对象的内存布局"><a href="#1-1-对象的内存布局" class="headerlink" title="1.1 对象的内存布局"></a>1.1 对象的内存布局</h3><ul>
-<li>对象头：对象头包含了<strong>Mark Word 、类型指针、对象数组长度</strong>这三个部分。（其中数组长度只有在是数组对象时才会存在）</li>
-<li>实例数据</li>
-<li>对齐填充：作用为将对象大小补齐为字节的倍数，如对象头和实例数据加起来为30位，就需要对齐填充2位</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80.png" class title="对象内存布局">
-
-
-
-<h3 id="1-2-内存分配"><a href="#1-2-内存分配" class="headerlink" title="1.2 内存分配"></a>1.2 内存分配</h3><ul>
-<li><p>划分内存的方法：如堆中内存空间整齐，采用指针碰撞（指针依次向后移动），如不整齐，采用空闲列表，记录每个位置是否已经存放对象</p>
-</li>
-<li><p>并发安全：<strong>CAS机制</strong>，如果有线程在访问，就自旋等待，再次访问时如访问位置不为空闲，就去访问下一个位置。或者采用<strong>本地线程缓存（TLAB）</strong>，在Eden区中划分一个内存大小为Eden百分之一的TLAB区，把每个线程对应的对象数据放入TLAB区，类似于ThreadLocal</p>
-</li>
-<li><p>堆中内存区域：</p>
-<ul>
-<li>新生代：占堆的三分之一大小，又细分为Eden，From，To三个区，内存比例为8：1：1，因为经过大数据调查显示，对象进入Eden区第一次GC，百分之九十都会被回收，而为了避免From或者To内存溢出，只有一半是有效内存</li>
-<li>老年代：占堆的三分之二大小</li>
-<li>新生代和老年代有着各自的垃圾回收器，新生代为Minor GC，老年代为Major GC，或者全局的Full GC</li>
-</ul>
-</li>
-<li><p>具体内存分配过程：</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D.png" class title="内存分配">
-
-<p>(1)优先进行逃逸分析，判断对象是否可以在栈中分配（如对象只存在于一个方法体中，没有其他方法调用，没有其他线程调用，就可以分配在栈中，因为对象会随着栈帧的出栈而回收）。</p>
-<p>(2)无法分配到栈中的对象就送入堆中，如果为大对象，直接存入老年代,如果不为大对象，但是采用了本地线程缓存，就存入TLAB区，如果都不满足，就存入Eden区的其余位置。</p>
-<p>(3)放入Eden区中的对象，在GC时，没有被回收的对象将会放入From区，再次GC还未被回收的对象就送入To区，一直来回存放，目的是避免From区和To区内存溢出，每进行一次GC，就把未回收的对象放入空的区中，将不为空的区全部回收，下一次继续进行这样的操作。存活的对象每进行一次位置转移，就把对象头中的age信息加一，age为四位，最大为15，所以在15次GC后要是对象还存活，就放入老年代。但是有一个例外，JVM为了防止From区和To区内存不足，如果GC时几个对象加起来大小很大，就直接放入老年代，无需等到age达到15，这个称为<strong>对象动态年龄判定</strong>。</p>
-<p>(4)为了保证老年代内存空间不溢出，JVM会在每一次有对象进入老年代时进行一次老年代GC，但是这样做很消耗内存，所以有一个<strong>空间分配担保</strong>，对象放入老年代时先不进行垃圾回收，如果老年代内存不够用了，再进行垃圾回收。还有一种<strong>空间分配担保</strong>，就是当From或者To区放不下时，让对象直接进入老年区。</p>
-</li>
-<li><p>内存分配的规则</p>
-<ul>
-<li>对象优先在Eden区分配</li>
-<li>大对象直接分配到老年代</li>
-<li>空间分配担保</li>
-<li>长期存活对象进入老年代</li>
-<li>对象年龄动态判定</li>
-</ul>
-</li>
-<li><p>优化： 本地线程缓冲（TLAB）</p>
-</li>
-</ul>
-<h3 id="1-3-内存空间初始化"><a href="#1-3-内存空间初始化" class="headerlink" title="1.3 内存空间初始化"></a>1.3 内存空间初始化</h3><p>​    内存分配完成后，虚拟机需要将分配到的内存空间都初始化为零值(如int值为0，boolean值为false等等)。这一步操作保证了对象的实例字段在Java代码中可以不赋初始值就直接使用，程序能访问到这些字段的数据类型所对应的零值。</p>
-<h2 id="2-对象访问定位"><a href="#2-对象访问定位" class="headerlink" title="2. 对象访问定位"></a>2. 对象访问定位</h2><ul>
-<li><p>句柄访问：每个对象的引用持有一个句柄，句柄中存放了到对象实例数据、对象类型数据的指针</p>
-</li>
-<li><p>直接指针访问：每个对象的的引用直接持有对象实例数据，还有对象类型指针</p>
-</li>
-<li><p>对比：</p>
-<p>优点：句柄访问可以在对象实例位置发生改变时不用重新分配引用的指针，直接指针访问可以只进行一次指针访问，速度快，效率高。</p>
-<p>缺点：句柄访问要进行两次指针访问，效率低，速度慢，直接指针访问在对象实例位置发生改变时需要重新定位。</p>
-</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E8%AE%BF%E9%97%AE%E5%AE%9A%E4%BD%8D.png" class title="对象访问定位">
-
-
-
-<h2 id="3-对象存活判断"><a href="#3-对象存活判断" class="headerlink" title="3. 对象存活判断"></a>3. 对象存活判断</h2><ul>
-<li>引用计数算法（无法解决对象互相引用的问题）：JVM维护一个变量，每创建一个对象就加一，回收一个就减一，直到为0就是全部回收完毕</li>
-<li>可达性分析：JVM将一些特别的对象（静态变量、常量池、虚拟机栈中引用的对象、JNI指针等等），定义为GC Root，当持有引用时就建立了关联，只要对象到GC Root之间有一条有关联的道路，就判断为对象存活</li>
-<li>但是不是经历了可达性分析不存活的对象就一定会被回收，在第一次可达性分析要被回收后，会进行一次筛选，如果类内部重写了finalized方法，就会执行一次此方法，可以在这个方法中自行救活对象，但是第二次回收就会直接回收。<strong>注意：finalized方法优先级很低，所以不建议使用</strong></li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%AD%98%E6%B4%BB.png" class title="对象存活">
-
-
-
-<h2 id="4-各种引用"><a href="#4-各种引用" class="headerlink" title="4. 各种引用"></a>4. 各种引用</h2><ul>
-<li><p>强引用：用 = 创建的对象，无论如何都不会被回收</p>
-</li>
-<li><p>软引用（softReference）：在JVM发生OOM时GC才会被回收</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-1.png" class title="软引用-1">
-
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-2.png" class title="软引用-2">
-</li>
-<li><p>弱引用（WeakReference）：在GC时就会回收</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-1.png" class title="弱引用-1">
-
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-2.png" class title="弱引用-2">
-</li>
-<li><p>虚引用：随时都会被回收，唯一作用就是监视垃圾回收器是否正常运行</p>
-</li>
-<li><p><strong><em>注意：</em></strong>软引用和弱引用，可以用在内存资源紧张的情况下以及创建不是很重要的数据缓存。当系统内存不足的时候，缓存中的内容是可以被释放（比如图片缓存）。实际运用（WeakHashMap、ThreadLocal）</p>
-</li>
-</ul>
-<h1 id="三、-垃圾回收器"><a href="#三、-垃圾回收器" class="headerlink" title="三、 垃圾回收器"></a>三、 垃圾回收器</h1><h2 id="1-垃圾回收算法"><a href="#1-垃圾回收算法" class="headerlink" title="1.垃圾回收算法"></a>1.垃圾回收算法</h2><h3 id="1-1-复制算法（Copying）"><a href="#1-1-复制算法（Copying）" class="headerlink" title="1.1 复制算法（Copying）"></a>1.1 复制算法（Copying）</h3><p>​    将可用内存按容量划分为大小相等的两块，每次只使用其中的一块。当这一块的内存用完了，就将还存活着的对象复制到另外一块上面，然后再把已使用过的内存空间一次清理掉。这样使得每次都是对整个半区进行内存回收，内存分配时也就不用考虑内存碎片等复杂情况，只要按顺序分配内存即可，实现简单，运行高效。只是这种算法的代价是将内存缩小为了原来的一半。</p>
-<p>​    专门研究表明，新生代中的对象98%是“朝生夕死”的，所以并不需要按照1:1的比例来划分内存空间，而是将内存分为一块较大的Eden空间和两块较小的Survivor空间，每次使用Eden和其中一块Survivor[1]。当回收时，将Eden和Survivor中还存活着的对象一次性地复制到另外一块Survivor空间上，最后清理掉Eden和刚才用过的Survivor空间。（分代收集理论）</p>
-<p>​    HotSpot虚拟机默认Eden和Survivor的大小比例是8:1，也就是每次新生代中可用内存空间为整个新生代容量的90%（80%+10%），只有10%的内存会被“浪费”。当然，98%的对象可回收只是一般场景下的数据，我们没有办法保证每次回收都只有不多于10%的对象存活，当Survivor空间不够用时，需要依赖其他内存（这里指老年代）进行分配担保（Handle Promotion）</p>
-<h3 id="1-2-标记-清除算法（Mark-Sweep）"><a href="#1-2-标记-清除算法（Mark-Sweep）" class="headerlink" title="1.2 标记-清除算法（Mark-Sweep）"></a>1.2 标记-清除算法（Mark-Sweep）</h3><p>​    算法分为“标记”和“清除”两个阶段：首先标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。它的主要不足空间问题，标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程序运行过程中需要分配较大对象时，无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。</p>
-<h3 id="1-3-标记-整理算法（Mark-Compact）"><a href="#1-3-标记-整理算法（Mark-Compact）" class="headerlink" title="1.3 标记-整理算法（Mark-Compact）"></a>1.3 标记-整理算法（Mark-Compact）</h3><p>​    首先标记出所有需要回收的对象，在标记完成后，后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。标记整理算法虽然没有内存碎片，但是效率偏低。</p>
-<h2 id="2-JVM中常见的垃圾收集器"><a href="#2-JVM中常见的垃圾收集器" class="headerlink" title="2. JVM中常见的垃圾收集器"></a>2. JVM中常见的垃圾收集器</h2><h3 id="2-1-分代收集的思想"><a href="#2-1-分代收集的思想" class="headerlink" title="2.1 分代收集的思想"></a>2.1 分代收集的思想</h3><p>​    在新生代中，每次垃圾收集时都发现有大批对象死去，只有少量存活，那就选用复制算法，只需要付出少量存活对象的复制成本就可以完成收集。</p>
-<p>​    而老年代中因为对象存活率高、没有额外空间对它进行分配担保，就必须使用“标记—清理”或者“标记—整理”算法来进行回收。</p>
-<p>​    <strong>请记住下图的垃圾收集器和之间的连线关系。</strong></p>
-
-
-
-
-<table>
-<thead>
-<tr>
-<th align="center"><strong><em>收集器</em></strong></th>
-<th><strong><em>收集对象和算法</em></strong></th>
-<th><strong><em>收集器类型</em></strong></th>
-<th><strong><em>说明</em></strong></th>
-<th><strong><em>适用场景</em></strong></th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">Serial</td>
-<td>新生代，复制算法</td>
-<td>单线程</td>
-<td></td>
-<td>简单高效；适合内存不大的情况；</td>
-</tr>
-<tr>
-<td align="center">ParNew</td>
-<td>新生代，复制算法</td>
-<td>并行的多线程收集器</td>
-<td>ParNew垃圾收集器是Serial收集器的多线程版本</td>
-<td>搭配CMS垃圾回收器的首选</td>
-</tr>
-<tr>
-<td align="center">Parallel Scavenge吞吐量优先收集器</td>
-<td>新生代，复制算法</td>
-<td>并行的多线程收集器</td>
-<td>类似ParNew，更加关注吞吐量，达到一个可控制的吞吐量；</td>
-<td>本身是Server级别多CPU机器上的默认GC方式，主要适合后台运算不需要太多交互的任务；</td>
-</tr>
-</tbody></table>
-<table>
-<thead>
-<tr>
-<th><strong><em>收集器</em></strong></th>
-<th><strong><em>收集对象和算法</em></strong></th>
-<th><strong><em>收集器类型</em></strong></th>
-<th><strong><em>说明</em></strong></th>
-<th><strong><em>适用场景</em></strong></th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Serial Old</td>
-<td>老年代，标记整理算法</td>
-<td>单线程</td>
-<td></td>
-<td>Client模式下虚拟机使用</td>
-</tr>
-<tr>
-<td>Parallel Old</td>
-<td>老年代，标记整理算法</td>
-<td>并行的多线程收集器</td>
-<td>Parallel Scavenge收集器的老年代版本，为了配合Parallel Scavenge的面向吞吐量的特性而开发的对应组合；</td>
-<td>在注重吞吐量以及CPU资源敏感的场合采用</td>
-</tr>
-<tr>
-<td>CMS</td>
-<td>老年代，标记清除算法</td>
-<td>并行与并发收集器</td>
-<td>尽可能的缩短垃圾收集时用户线程停止时间；缺点在于： 1.内存碎片 2.需要更多cpu资源 3.浮动垃圾问题，需要更大的堆空间</td>
-<td>重视服务的响应速度、系统停顿时间和用户体验的互联网网站或者B/S系统。互联网后端目前cms是主流的垃圾回收器；</td>
-</tr>
-<tr>
-<td>G1</td>
-<td>跨新生代和老年代；标记整理 + 化整为零</td>
-<td>并行与并发收集器</td>
-<td>JDK1.7才正式引入，采用分区回收的思维，基本不牺牲吞吐量的前提下完成低停顿的内存回收；可预测的停顿是其最大的优势；</td>
-<td>面向服务端应用的垃圾回收器，目标为取代CMS</td>
-</tr>
-</tbody></table>
-<p>并行：垃圾收集的多线程的同时进行。</p>
-<p>并发：垃圾收集的多线程和应用的多线程同时进行。</p>
-<p>注：吞吐量=运行用户代码时间/(运行用户代码时间+ 垃圾收集时间)</p>
-<p>垃圾收集时间= 垃圾回收频率 * 单次垃圾回收时间</p>
-<h3 id="2-2-垃圾回收器工作示意图"><a href="#2-2-垃圾回收器工作示意图" class="headerlink" title="2.2 垃圾回收器工作示意图"></a>2.2 垃圾回收器工作示意图</h3><ul>
-<li><p>Serial/Serial Old</p>
-<p>最古老的，单线程，独占式，成熟，适合单CPU  服务器</p>
-<p>-XX:+UseSerialGC 新生代和老年代都用串行收集器</p>
-<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
-<p>-XX:+UseParallelGC 新生代使用ParallerGC，老年代使用Serial Old</p>
-</li>
-<li><p>ParNew</p>
-<p>和Serial基本没区别，唯一的区别：多线程，多CPU的，停顿时间比Serial少</p>
-<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
-</li>
-<li><p>Parallel Scavenge（ParallerGC）/Parallel Old</p>
-<p>​    关注吞吐量的垃圾收集器，高吞吐量则可以高效率地利用CPU时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务。</p>
-<p>​    所谓吞吐量就是CPU用于运行用户代码的时间与CPU总消耗时间的比值，即吞吐量=运行用户代码时间/（运行用户代码时间+垃圾收集时间），虚拟机总共运行了100分钟，其中垃圾收集花掉1分钟，那吞吐量就是99%。</p>
-</li>
-<li><p>Concurrent Mark Sweep （CMS）</p>
- 
-
-<p>​    CMS收集器是一种以获取<strong>最短回收停顿时间</strong>为目标的收集器。目前很大一部分的Java应用集中在互联网站或者B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿时间最短，以给用户带来较好的体验。CMS收集器就非常符合这类应用的需求。</p>
-<p>​    从名字（包含“Mark Sweep”）上就可以看出，CMS收集器是基于<strong>“标记—清除”算法</strong>实现的，它的运作过程相对于前面几种收集器来说更复杂一些，整个过程分为4个步骤，包括：</p>
-<p><strong>l</strong> <strong><em>初始标记</em></strong>——短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快</p>
-<p><strong>l</strong> <strong><em>并发标记</em></strong>——长，和用户的应用程序同时进行，进行GC Roots追踪的过程</p>
-<p><strong>l</strong> <strong><em>重新标记</em></strong>——短暂，为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短</p>
-<p><strong>l</strong> <strong><em>并发清除</em></strong>——长，清除掉标记的对象</p>
-<p><strong>l 优点：</strong></p>
-<p>​    由于整个过程中耗时最长的并发标记和并发清除过程收集器线程都可以与用户线程一起工作，所以，从总体上来说，CMS收集器的内存回收过程是与用户线程一起并发执行的，用户体验好。</p>
-<p>-XX:+UseConcMarkSweepGC ，表示新生代使用ParNew，老年代的用CMS</p>
-<p><strong>l 缺点：</strong></p>
-<ul>
-<li><p>浮动垃圾</p>
-<p>​    由于CMS并发清理阶段用户线程还在运行着，伴随程序运行自然就还会有新的垃圾不断产生，这一部分垃圾出现在标记过程之后，CMS无法在当次收集中处理掉它们，只好留待下一次GC时再清理掉。这一部分垃圾就称为“浮动垃圾”。</p>
-<p>​    为了防止浮动垃圾导致OOM，每次在老年代内存被占了80%时就会进行GC，如果还是OOM了，就让Serial Old 进行处理，这是STW会特别多，影响用户体验。</p>
-</li>
-<li><p>内存碎片</p>
-<p>因为CMS采用的是标记——清除算法，所以会存在内存碎片，导致GC提前进行。</p>
-</li>
-<li><p>CPU敏感：CPU小于4时影响性能</p>
-</li>
-</ul>
-</li>
-<li><p>G1</p>
-  
-
-<p>-XX:+UseG1GC</p>
-<ul>
-<li><p>并发标记周期</p>
-<ul>
-<li><p>初始标记</p>
-<p>​    短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，产生一个全局停顿，都伴随有一次新生代的GC。</p>
-</li>
-<li><p>根区域扫描</p>
-<p>扫描survivor区可以直接到达的老年代区域。</p>
-</li>
-<li><p>并发标记阶段</p>
-<p>扫描和查找整个堆的存活对象，并标记。</p>
-</li>
-<li><p>重新标记</p>
-<p>会产生全局停顿，对并发标记阶段的结果进行修正。</p>
-</li>
-<li><p>独占清理</p>
-<p>会产生全局停顿，对GC回收比例进行排序，供混合收集阶段使用。</p>
-</li>
-<li><p>并发清理</p>
-<p>识别并清理完全空闲的区域，并发进行。</p>
-</li>
-</ul>
-</li>
-<li><p>并行与并发</p>
-<p>​    G1能充分利用多CPU、多核环境下的硬件优势，使用多个CPU（CPU或者CPU核心）来缩短Stop-The-World停顿的时间，部分其他收集器原本需要停顿Java线程执行的GC动作，G1收集器仍然可以通过并发的方式让Java程序继续执行。</p>
-</li>
-<li><p>分代收集</p>
-<p>​    与其他收集器一样，分代概念在G1中依然得以保留。虽然G1可以不需要其他收集器配合就能独立管理整个GC堆，但它能够采用不同的方式去处理新创建的对象和已经存活了一段时间、熬过多次GC的旧对象以获取更好的收集效果。</p>
-
-</li>
-<li><p>空间整合</p>
-<p>​    与CMS的“标记—清理”算法不同，G1从整体来看是基于“标记—整理”算法实现的收集器，从局部（两个Region之间）上来看是基于“复制”算法实现的，但无论如何，这两种算法都意味着G1运作期间不会产生内存空间碎片，收集后能提供规整的可用内存。这种特性有利于程序长时间运行，分配大对象时不会因为无法找到连续内存空间而提前触发下一次GC。</p>
-</li>
-<li><p>内存布局</p>
-<p>​    在G1之前的其他收集器进行收集的范围都是整个新生代或者老年代，而G1不再是这样。使用G1收集器时，Java堆的内存布局就与其他收集器有很大差别，它将整个Java堆划分为多个大小相等的独立区域（Region），虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔离的了，它们都是一部分Region（不需要连续）的集合。</p>
-</li>
-<li><p>混合收集</p>
-<ul>
-<li><p>对含有垃圾比例较高的Region进行回收。</p>
-</li>
-<li><p>G1当出现内存不足的的情况，也可能进行的FullGC回收。</p>
-</li>
-<li><p>G1中重要的参数：</p>
-<p>-XX:MaxGCPauseMillis 指定目标的最大停顿时间，G1尝试调整新生代和老年代的比例，堆大小，晋升年龄来达到这个目标时间。</p>
-<p>-XX:ParallerGCThreads：设置GC的工作线程数量</p>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-<h2 id="3-Stop-The-World现象"><a href="#3-Stop-The-World现象" class="headerlink" title="3. Stop The World现象"></a>3. Stop The World现象</h2><p>STW就是暂停用户线程。</p>
-<p>GC收集器和我们GC调优的目标就是尽可能的减少STW的时间和次数。</p>
-<h2 id="4-未来的垃圾回收"><a href="#4-未来的垃圾回收" class="headerlink" title="4. 未来的垃圾回收"></a>4. 未来的垃圾回收</h2><p>​    ZGC通过技术手段把stw的情况控制在仅有一次，就是第一次的初始标记才会发生，这样也就不难理解为什么GC停顿时间不随着堆增大而上升了，再大我也是通过并发的时间去回收了。</p>
-<p>​    关键技术：</p>
-<p>​    <strong>1.</strong> <strong><em>有色指针（Colored Pointers）</em></strong></p>
-<p>​    <strong>2.</strong> <strong><em>加载屏障（Load Barrier）</em></strong></p>
-<h2 id="5-常量池与String"><a href="#5-常量池与String" class="headerlink" title="5. 常量池与String"></a>5. 常量池与String</h2><p>​    常量池有很多概念，包括运行时常量池、class常量池、字符串常量池。</p>
-<p>​    虚拟机规范只规定以上区域属于方法区，并没有规定虚拟机厂商的实现。</p>
-<p>​    严格来说是静态常量池和运行时常量池，静态常量池是存放字符串字面量、符号引用以及类和方法的信息，而运行时常量池存放的是运行时一些直接引用。<br>​    运行时常量池是在类加载完成之后，将静态常量池中的符号引用值转存到运行时常量池中，类在解析之后，将符号引用替换成直接引用。<br>​    这两个常量池在JDK1.7版本之后，就移到堆内存中了，这里指的是物理空间，而逻辑上还是属于方法区（方法区是逻辑分区）。</p>
-<ul>
-<li><p>字面量</p>
-<p>给基本类型变量赋值的方式就叫做字面量或者字面值。</p>
-<p>比如：int i=120; long j=10L;</p>
-</li>
-<li><p>符号引用</p>
-<p>​    包括类和方法的全限定名（例如 String 这个类，它的全限定名就是 Java/lang/String）、字段的名称和描述符以及方法的名称和描述符。</p>
-</li>
-<li><p>直接引用</p>
-<p>具体对象的索引值。</p>
-</li>
-<li><p>String的初始赋值</p>
- 
-
-<pre><code>而如果调用了insern方法，就是直接在字符串常量池中找字符串，如果没有再创建，返回的是字符串常量池的引用。</code></pre></li>
-</ul>
-<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1><h2 id="1-ART和Dalvik"><a href="#1-ART和Dalvik" class="headerlink" title="1. ART和Dalvik"></a>1. ART和Dalvik</h2><p>​    Android应用程序运行在Dalvik/ART虚拟机，并且每一个应用程序对应有一个单独的Dalvik虚拟机实例。Dalvik虚拟机实则也算是一个Java虚拟机，只不过它执行的不是class文件，而是dex文件。</p>
-<p>​    Dalvik虚拟机与Java虚拟机共享有差不多的特性，差别在于两者执行的指令集是不一样的，前者的指令集是基本寄存器的，而后者的指令集是基于堆栈的。</p>
-
-
-
-
-<ul>
-<li><p>基于寄存器的虚拟机：</p>
-<p>​    相当于把基于堆栈的虚拟机的局部变量表和操作数栈合并为了一个虚拟寄存器，模仿CPU寄存器操作，将指令运行步骤大大减少。</p>
-</li>
-</ul>
-<p>​    （1）Dalvik虚拟机执行的是dex字节码，是解释执行，在Android2.2后，加入了JIT（即时编译技术），在运行时可以选择经常执行的代码进行编译优化，在本次程序执行完毕后会清除记录。</p>
-<p>​    （2）在Android5.0后，默认使用ART虚拟机，直接执行本地机器码，而把dex字节码编译成机器码的东西就是AOT（预先编译技术），在程序安装时进行预编译，将应用直接编译为机器码，但是这样的弊端就是安装会非常慢。</p>
-<p>​    （3）在安装时，dalvik将.dex文件优化为.odex文件，ART将.dex文件优化为机器码文件。</p>
-<p>​    （4）Android N ：混合编译，在第一次安装时不执行AOT（安装速度变快），在运行的同时进行JIT，将经常运行的代码进行编译，并保存到Profile文件下。在手机充电或者闲置时，通过AOT技术将Profile文件下的代码进行编译，保存机器码，下次运行时直接使用。</p>
-<h2 id="2-Android类加载器"><a href="#2-Android类加载器" class="headerlink" title="2. Android类加载器"></a>2. Android类加载器</h2>
-
-<p>全局getClassLoader获取到的就是PathClassLoader</p>
-<p>​    类加载过程：</p>
-<ul>
-<li><p>loadClass</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="keyword">boolean</span> resolve)                         <span class="keyword">throws</span> ClassNotFoundException</span><br><span class="line">    &#123;</span><br><span class="line">    Class&lt;?&gt; c = findLoadedClass(name);<span class="comment">//寻找是否已经加载</span></span><br><span class="line">    <span class="keyword">if</span>(c == <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="comment">//如果没有加载，首先找父加载器，这里的父加载器是BootClassLoader</span></span><br><span class="line">        c = parent.loadClass(name, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">        	<span class="comment">//如果还是未加载，就使用自己的类加载器进行加载</span></span><br><span class="line">        	c = findClass(name);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>这里采用的是双亲委派模型，先让父加载器加载，再让自己加载。</p>
-<p>原因：</p>
-<ul>
-<li>安全性：无法恶意篡改系统已有的类，因为会被BootClassLoader直接加载，加载的是系统层的类</li>
-<li>避免重复加载</li>
-</ul>
-</li>
-<li><p>findLoadedClass 调用的是VMClassLoader类里的方法，直接是native层</p>
-</li>
-<li><p>parent.loadClass</p>
-<p>调用到BaseDexClassLoader的findClass方法。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException&#123;</span><br><span class="line">    Class c = pathList.findClass(name, suppressedExceptions);</span><br><span class="line">    <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>而pathList是一个DexPathList对象。</p>
-<p>在pathList中又有一个element数组用于存放多个dex文件。</p>
-<p>最后遍历编译。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"> <span class="keyword">private</span> Element[] dexElements;</span><br><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">     <span class="keyword">for</span> (Element element : dexElements) &#123;</span><br><span class="line">            Class&lt;?&gt; clazz = element.findClass(name, definingContext, suppressed);</span><br><span class="line">            <span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> clazz;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, ClassLoader definingContext,</span><br><span class="line">                List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">            <span class="keyword">return</span> dexFile != <span class="keyword">null</span> ? dexFile.loadClassBinaryName(name, definingContext, suppressed)</span><br><span class="line">                    : <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
-
-<p>直接loadClassBinaryName把dex文件编译加载好。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> Element[] makeDexElements(List&lt;File&gt; files, File optimizedDirectory,</span><br><span class="line">           List&lt;IOException&gt; suppressedExceptions, ClassLoader loader, <span class="keyword">boolean</span> isTrusted)</span><br></pre></td></tr></table></figure>
-
-<p>通过这个方法把element数组初始化，在热修复时也可以通过这个方法，把dex文件构造成element数组，放在pathList中dexElements的最前面。</p>
-</li>
-</ul>
-  
-
-<ul>
-<li><p>findClass</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException &#123;</span><br><span class="line">       <span class="keyword">return</span> Class.classForName(name, <span class="keyword">false</span>, <span class="keyword">null</span>);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-
-<p>直接寻找类名并加载。</p>
-</li>
-</ul>
 ]]></content>
   </entry>
 </search>
