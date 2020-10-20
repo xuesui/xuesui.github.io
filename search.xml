@@ -186,113 +186,6 @@
 ]]></content>
   </entry>
   <entry>
-    <title>handler</title>
-    <url>/2020/10/19/handler/</url>
-    <content><![CDATA[<h1 id="Handler工作流程"><a href="#Handler工作流程" class="headerlink" title="Handler工作流程"></a>Handler工作流程</h1><img src="/2020/10/19/handler/handler%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6.png" class title="handler工作机制">
-
-<p>​    就像这张图一样，handler只是负责发送消息、取出消息，把消息放在传送带上，传送带就是MessageQueue，相当于一个容器（一个用单链表实现的优先级队列，根据事件处理时间来进行优先级判断），而传送带的动力就是Looper，在安卓程序启动的时候会在jvm里找到main方法入口（ActivityThread中），在main方法里进行主线程Looper的prepare和loop，在loop中无限循环，不停的调用queue.next()，取出队头的消息，当messageQueue内存不够了，继续入队时就会系统卡死，系统的消息也无法入队响应，而当messageQueue为空时，就会阻塞当前线程，等待下一个消息入队，再唤醒。</p>
-<h1 id="细节"><a href="#细节" class="headerlink" title="细节"></a>细节</h1><p>从handler的使用入手，我们使用的时候，是创建一个handler，重写handleMessage方法，然后在主线程sendMessage。</p>
-<p>所以开始和结尾就分别为sendMessage和handleMessage，我们从这里入手去看源码。</p>
-<ul>
-<li><p>handler.sendMessage() —&gt;handler.sendMessageAtTime() —&gt;enqueueMessage</p>
-<p>所有的send、post方法最终都会调用进入sendMessageAtTime方法，然后进行消息的入队操作enqueueMessage，所以这就能印证handler的作用就是把消息放在传送带上，也就是把消息入队。</p>
-<img src="/2020/10/19/handler/handleMessage.png" class title="handleMessage">
-</li>
-<li><p>queue.enqueueMessage()</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	prev = p;</span><br><span class="line">    p = p.next;</span><br><span class="line">    <span class="keyword">if</span> (p == <span class="keyword">null</span> || when &lt; p.when) &#123;</span><br><span class="line">    	<span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (needWake &amp;&amp; p.isAsynchronous()) &#123;</span><br><span class="line">        needWake = <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">msg.next = p; <span class="comment">// invariant: p == prev.next</span></span><br><span class="line">prev.next = msg;</span><br></pre></td></tr></table></figure>
-
-<p>​    这里是入队的一系列操作，可以看出这个队列是由一个单链表实现的，而且会根据事件处理事件进行<strong>插入排序</strong>，所以这个队列是一个优先级队列。</p>
-</li>
-<li><p>Looper.loop() ，Looper.prepareMainLooper()</p>
-<p>入队结束后，所有的事情都交给Looper来进行传动，从程序启动main方法入手。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">Looper.prepareMainLooper();</span><br><span class="line">Looper.loop();</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><p>Looper.prepareMainLooper();</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepareMainLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        prepare(<span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">synchronized</span> (Looper<span class="class">.<span class="keyword">class</span>) </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (sMainLooper != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The main Looper has already been prepared."</span>);</span><br><span class="line">            &#125;</span><br><span class="line">            sMainLooper = myLooper();</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="meta">@Nullable</span> <span class="function">Looper <span class="title">myLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sThreadLocal.get();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepare</span><span class="params">(<span class="keyword">boolean</span> quitAllowed)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (sThreadLocal.get() != <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Only one Looper may be created per thread"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        sThreadLocal.set(<span class="keyword">new</span> Looper(quitAllowed));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//ThreadLocal</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">set</span><span class="params">(T value)</span> </span>&#123;</span><br><span class="line">        Thread t = Thread.currentThread();</span><br><span class="line">        ThreadLocalMap map = getMap(t);</span><br><span class="line">        <span class="keyword">if</span> (map != <span class="keyword">null</span>)</span><br><span class="line">            map.set(<span class="keyword">this</span>, value);</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            createMap(t, value);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    从这里可以看出，Looper的准备其实就是在主线程的ThreadLocal的ThreadLocalMap里添加了一个key为ThreadLocal，value为Looper的键值对。</p>
-<p>​    并且static final ThreadLocal<Looper> sThreadLocal = new ThreadLocal<Looper>();ThreadLocal是静态常量，所以只有一个。</Looper></Looper></p>
-<p>​    在set的时候如果map不为空，就会抛出异常，所以Looper也无法更改。</p>
-<p>​    ThreadLocal全系统就只有一个，而Looper可以有多个，但是ThreadLocal可以有多个ThreadLocalMap，每个Map的key都是唯一的ThreadLocal，value就是对应线程的Looper。</p>
-<p>​    因此可以解释为什么一个线程只能有一个Looper和一个ThreadLocalMap了。</p>
-</li>
-<li><p>Looper.loop();</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	Message msg = queue.next()；</span><br><span class="line">    <span class="keyword">if</span> (msg == <span class="keyword">null</span>) &#123;</span><br><span class="line">      <span class="comment">// No message indicates that the message queue is quitting.</span></span><br><span class="line">      <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  msg.target.dispatchMessage(msg);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    在loop中会进入一个无限循环，不停的取出MessageQueue的队头消息，这个循环只有在msg为空的情况下才会跳出循环，而主线程的loop方法只有在程序退出时会结束。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">dispatchMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg.callback != <span class="keyword">null</span>) &#123;</span><br><span class="line">            handleCallback(msg);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (mCallback != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">if</span> (mCallback.handleMessage(msg)) &#123;</span><br><span class="line">                    <span class="keyword">return</span>;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">          handleMessage(msg);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>然后进入dispatchMessage，调入到handleMessage，流程结束。</p>
-</li>
-</ul>
-</li>
-</ul>
-<h1 id="注意点"><a href="#注意点" class="headerlink" title="注意点"></a>注意点</h1><h2 id="消息沉睡唤醒机制"><a href="#消息沉睡唤醒机制" class="headerlink" title="消息沉睡唤醒机制"></a>消息沉睡唤醒机制</h2><p>​    在消息入队和消息出队时，都会有特殊情况的出现，比如队列为空，队列为满，虽然并没有处理队列为满的情况，但是在消息把内存占满的情况下。系统消息无法入队，就会造成手机卡死，所以handler不能用来做定时提醒。</p>
-<p>​    在两种情况下会造成阻塞：</p>
-<ul>
-<li>队列里没有消息时会无限阻塞，直到又有消息入队时会唤醒。</li>
-<li>队列里出队的消息需要延时执行，会阻塞到执行时间。</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">int</span> nextPollTimeoutMillis = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span>(;;)&#123;</span><br><span class="line">    <span class="comment">//沉睡</span></span><br><span class="line">    nativePollOnce(ptr, nextPollTimeoutMillis);</span><br><span class="line">    <span class="comment">//进入循环遍历和等待操作</span></span><br><span class="line">    <span class="keyword">synchronized</span>(<span class="keyword">this</span>)&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (now &lt; msg.when) &#123;</span><br><span class="line">                        <span class="comment">// Next message is not ready.  Set a timeout to wake up when it is ready.</span></span><br><span class="line">                        nextPollTimeoutMillis = (<span class="keyword">int</span>) Math.min(msg.when - now, Integer.MAX_VALUE);</span><br><span class="line">                    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                        <span class="comment">// Got a message.</span></span><br><span class="line">                        mBlocked = <span class="keyword">false</span>;</span><br><span class="line">                        <span class="keyword">if</span> (prevMsg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                            prevMsg.next = msg.next;</span><br><span class="line">                        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                            mMessages = msg.next;</span><br><span class="line">                        &#125;</span><br><span class="line">                        msg.next = <span class="keyword">null</span>;</span><br><span class="line">                        <span class="keyword">if</span> (DEBUG) Log.v(TAG, <span class="string">"Returning message: "</span> + msg);</span><br><span class="line">                        msg.markInUse();</span><br><span class="line">                        <span class="keyword">return</span> msg;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">// No more messages.</span></span><br><span class="line">                    nextPollTimeoutMillis = -<span class="number">1</span>;</span><br><span class="line">                &#125;</span><br><span class="line">		&#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    这段代码是在一个无限循环中进行的，nextPollTimeoutMillis初始值为0，nativePollOnce沉睡，如果消息执行时间比现在的时间晚，就回计算出间隔时间，并且沉睡这么久，如果队列为空，就会赋值为-1，无限沉睡。</p>
-<p>​    唤醒函数是在插入新的消息时调用。</p>
-<h2 id="线程安全"><a href="#线程安全" class="headerlink" title="线程安全"></a>线程安全</h2><p>​    handler和Looper内部并没有关注线程安全，而是全部交给MessageQueue入队和出队时处理。</p>
-<p>​    在出队时，有一个内置对象锁，锁的是messageQueue对象，所以不同线程的handler发送和取出消息时，都会阻塞。</p>
-<p>​    同理，在入队时也会有一个内置对象锁，锁的是messageQueue对象。</p>
-<h2 id="子线程创建Handler"><a href="#子线程创建Handler" class="headerlink" title="子线程创建Handler"></a>子线程创建Handler</h2><p>​    如果在子线程中创建handler，需要自己执行Looper.prepare,Looper.loop函数，并且在队列为空时需要调用Looper.quit结束loop中的循环。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">quit</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	mQueue.quit(<span class="keyword">false</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//MessageQueue</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">quit</span><span class="params">(<span class="keyword">boolean</span> safe)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//在主线程中不允许quit操作</span></span><br><span class="line">	<span class="keyword">if</span> (!mQuitAllowed) &#123;</span><br><span class="line">    	<span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Main thread not allowed to quit."</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">    	<span class="keyword">if</span> (mQuitting) &#123;</span><br><span class="line">           <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//把 mQuitting设置为true</span></span><br><span class="line">        mQuitting = <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//移除消息队列中所有消息</span></span><br><span class="line">        <span class="keyword">if</span> (safe) &#123;</span><br><span class="line">        	removeAllFutureMessagesLocked();</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            removeAllMessagesLocked();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//唤醒next方法中的沉睡线程</span></span><br><span class="line">        <span class="comment">// We can assume mPtr != 0 because mQuitting was previously false.</span></span><br><span class="line">        nativeWake(mPtr);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    此时再进入next中的for循环，在<strong>if (mQuitting) {dispose();return null;}</strong>处返回null，再回到Looper.loop中，<strong>if (msg == null)  return;</strong>结束for循环，当前线程的Looper就停止运作。</p>
-<h2 id="内存泄露"><a href="#内存泄露" class="headerlink" title="内存泄露"></a>内存泄露</h2><ul>
-<li><p>为什么使用Handler会造成内存泄露？</p>
-<p>​    因为内部类调用外部类的方法或者变量，导致内部类持有外部类引用，匿名内部类持有Activity.this，而Message持有Handler，MessageQueue又持有Message，MessageQueue又是在Looper构造函数时创建的，每一个线程就只有一个MessageQueue，而Looper在线程还存活时就一直存在，所以当Activity需要被回收时，根据JVM可达性分析，GC下activity无法被回收，导致内存溢出。</p>
-<p><strong>Looper -&gt; MessageQueue -&gt; Message  -&gt; Handler -&gt;Activity.this</strong></p>
-</li>
-<li><p>为什么其他地方的内部类并不会有这种情况？</p>
-<p>因为handler和Activity生命周期不同，而其它地方生命周期相同，可以同时回收。</p>
-</li>
-</ul>
-<h2 id="Message怎么创建"><a href="#Message怎么创建" class="headerlink" title="Message怎么创建"></a>Message怎么创建</h2><ul>
-<li><p>一般是利用message.obtain方法创建</p>
-</li>
-<li><p>如果频繁的new Message()，会导致内存抖动，gc频繁造成卡顿，有可能OOM</p>
-</li>
-<li><p>如何处理？</p>
-<p>​    在loop中，msg.dispatchMessage被调用之后，会调用msg.recycleUnchecked()，把这个消息插入一个单链表的头部，在调用obtain时，将新的消息赋值给头部结点，将其取出。</p>
-<p>​    这样的好处就是把内存空间一直保留着，不会产生内存碎片，及内存抖动。</p>
-</li>
-</ul>
-<h2 id="loop的死循环阻塞为什么不会导致ANR"><a href="#loop的死循环阻塞为什么不会导致ANR" class="headerlink" title="loop的死循环阻塞为什么不会导致ANR"></a>loop的死循环阻塞为什么不会导致ANR</h2><ul>
-<li>ANR是当事件一段时间无响应时，通过handler新建一个ANR事件，去进行提醒</li>
-<li>ANR发生是因为事件一段时间无响应造成的</li>
-<li>而ANR本身也是一个事件</li>
-<li>而loop里的阻塞是因为没有事情干了，把CPU释放出来沉睡休息，完全没有关联</li>
-</ul>
-<h1 id="同步屏障"><a href="#同步屏障" class="headerlink" title="同步屏障"></a>同步屏障</h1><img src="/2020/10/19/handler/%E5%90%8C%E6%AD%A5%E5%B1%8F%E9%9A%9C.png" class title="同步屏障">
-
-<p>​    如果有需要立刻执行的消息，就可以先调用message.postSyncBarrier()方法发送同步屏障，插入到对头，这条消息的target为null。</p>
-<p>​    然后再把需要立刻执行的消息setAsynchronous(true)设置为异步消息，再send，然后在next方法中：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (msg != <span class="keyword">null</span> &amp;&amp; msg.target == <span class="keyword">null</span>) &#123;</span><br><span class="line">	<span class="comment">// Stalled by a barrier.  Find the next asynchronous message in the queue.</span></span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">    	prevMsg = msg;</span><br><span class="line">        msg = msg.next;</span><br><span class="line">    &#125; <span class="keyword">while</span> (msg != <span class="keyword">null</span> &amp;&amp; !msg.isAsynchronous());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    如果target==null，就直接找到最近的异步消息，立刻执行。</p>
-<p>​    这个机制在ui更新上应用很多，ui每16ms就会刷新一次，就是发送同步屏障和异步消息来实现。</p>
-<h1 id="HandlerThread"><a href="#HandlerThread" class="headerlink" title="HandlerThread"></a>HandlerThread</h1><p>用于方便的把Handler在子线程中使用，其继承于Thread，并且保证了线程安全。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        mTid = Process.myTid();</span><br><span class="line">        Looper.prepare();</span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            mLooper = Looper.myLooper();</span><br><span class="line">            notifyAll();</span><br><span class="line">        &#125;</span><br><span class="line">        Process.setThreadPriority(mPriority);</span><br><span class="line">        onLooperPrepared();</span><br><span class="line">        Looper.loop();</span><br><span class="line">        mTid = -<span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> Looper <span class="title">getLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (!isAlive()) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// If the thread has been started, wait until the looper has been created.</span></span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive() &amp;&amp; mLooper == <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    wait();</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> mLooper;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-<p>通过对象锁和wait、notifyAll保证线程安全。</p>
-<p><strong>使用：</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">HandlerThread handlerThread = <span class="keyword">new</span> HandlerThread(<span class="string">"xxxxxx"</span>);</span><br><span class="line">handlerThread.start();</span><br><span class="line">mHandler = <span class="keyword">new</span> Handler(handlerThread.getLooper());</span><br><span class="line">mHandler.sendMessage();</span><br></pre></td></tr></table></figure>
-
-<h1 id="IntentService"><a href="#IntentService" class="headerlink" title="IntentService"></a>IntentService</h1><p>用于后台服务处理一些异步消息。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onCreate</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>.onCreate();</span><br><span class="line">        HandlerThread thread = <span class="keyword">new</span> HandlerThread(<span class="string">"IntentService["</span> + mName + <span class="string">"]"</span>);</span><br><span class="line">        thread.start();</span><br><span class="line"></span><br><span class="line">        mServiceLooper = thread.getLooper();</span><br><span class="line">        mServiceHandler = <span class="keyword">new</span> ServiceHandler(mServiceLooper);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onStart</span><span class="params">(@Nullable Intent intent, <span class="keyword">int</span> startId)</span> </span>&#123;</span><br><span class="line">        Message msg = mServiceHandler.obtainMessage();</span><br><span class="line">        msg.arg1 = startId;</span><br><span class="line">        msg.obj = intent;</span><br><span class="line">        mServiceHandler.sendMessage(msg);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">ServiceHandler</span> <span class="keyword">extends</span> <span class="title">Handler</span> </span>&#123;</span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="title">ServiceHandler</span><span class="params">(Looper looper)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">super</span>(looper);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">handleMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">            onHandleIntent((Intent)msg.obj);</span><br><span class="line">            stopSelf(msg.arg1);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>重写时重写onHandleIntent方法，进行异步任务，</p>
-<p>在OnCreate时利用HandlerThread获取handler，然后在onStart时发送消息，在处理消息时调用onHandleIntent，并且停止服务。</p>
-]]></content>
-  </entry>
-  <entry>
     <title>java虚拟机</title>
     <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
     <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
@@ -751,6 +644,113 @@
 ]]></content>
   </entry>
   <entry>
+    <title>handler</title>
+    <url>/2020/10/19/handler/</url>
+    <content><![CDATA[<h1 id="Handler工作流程"><a href="#Handler工作流程" class="headerlink" title="Handler工作流程"></a>Handler工作流程</h1><img src="/2020/10/19/handler/handler%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6.png" class title="handler工作机制">
+
+<p>​    就像这张图一样，handler只是负责发送消息、取出消息，把消息放在传送带上，传送带就是MessageQueue，相当于一个容器（一个用单链表实现的优先级队列，根据事件处理时间来进行优先级判断），而传送带的动力就是Looper，在安卓程序启动的时候会在jvm里找到main方法入口（ActivityThread中），在main方法里进行主线程Looper的prepare和loop，在loop中无限循环，不停的调用queue.next()，取出队头的消息，当messageQueue内存不够了，继续入队时就会系统卡死，系统的消息也无法入队响应，而当messageQueue为空时，就会阻塞当前线程，等待下一个消息入队，再唤醒。</p>
+<h1 id="细节"><a href="#细节" class="headerlink" title="细节"></a>细节</h1><p>从handler的使用入手，我们使用的时候，是创建一个handler，重写handleMessage方法，然后在主线程sendMessage。</p>
+<p>所以开始和结尾就分别为sendMessage和handleMessage，我们从这里入手去看源码。</p>
+<ul>
+<li><p>handler.sendMessage() —&gt;handler.sendMessageAtTime() —&gt;enqueueMessage</p>
+<p>所有的send、post方法最终都会调用进入sendMessageAtTime方法，然后进行消息的入队操作enqueueMessage，所以这就能印证handler的作用就是把消息放在传送带上，也就是把消息入队。</p>
+<img src="/2020/10/19/handler/handleMessage.png" class title="handleMessage">
+</li>
+<li><p>queue.enqueueMessage()</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	prev = p;</span><br><span class="line">    p = p.next;</span><br><span class="line">    <span class="keyword">if</span> (p == <span class="keyword">null</span> || when &lt; p.when) &#123;</span><br><span class="line">    	<span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (needWake &amp;&amp; p.isAsynchronous()) &#123;</span><br><span class="line">        needWake = <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">msg.next = p; <span class="comment">// invariant: p == prev.next</span></span><br><span class="line">prev.next = msg;</span><br></pre></td></tr></table></figure>
+
+<p>​    这里是入队的一系列操作，可以看出这个队列是由一个单链表实现的，而且会根据事件处理事件进行<strong>插入排序</strong>，所以这个队列是一个优先级队列。</p>
+</li>
+<li><p>Looper.loop() ，Looper.prepareMainLooper()</p>
+<p>入队结束后，所有的事情都交给Looper来进行传动，从程序启动main方法入手。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">Looper.prepareMainLooper();</span><br><span class="line">Looper.loop();</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p>Looper.prepareMainLooper();</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepareMainLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        prepare(<span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">synchronized</span> (Looper<span class="class">.<span class="keyword">class</span>) </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (sMainLooper != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The main Looper has already been prepared."</span>);</span><br><span class="line">            &#125;</span><br><span class="line">            sMainLooper = myLooper();</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="meta">@Nullable</span> <span class="function">Looper <span class="title">myLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sThreadLocal.get();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepare</span><span class="params">(<span class="keyword">boolean</span> quitAllowed)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (sThreadLocal.get() != <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Only one Looper may be created per thread"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        sThreadLocal.set(<span class="keyword">new</span> Looper(quitAllowed));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//ThreadLocal</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">set</span><span class="params">(T value)</span> </span>&#123;</span><br><span class="line">        Thread t = Thread.currentThread();</span><br><span class="line">        ThreadLocalMap map = getMap(t);</span><br><span class="line">        <span class="keyword">if</span> (map != <span class="keyword">null</span>)</span><br><span class="line">            map.set(<span class="keyword">this</span>, value);</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            createMap(t, value);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    从这里可以看出，Looper的准备其实就是在主线程的ThreadLocal的ThreadLocalMap里添加了一个key为ThreadLocal，value为Looper的键值对。</p>
+<p>​    并且static final ThreadLocal<Looper> sThreadLocal = new ThreadLocal<Looper>();ThreadLocal是静态常量，所以只有一个。</Looper></Looper></p>
+<p>​    在set的时候如果map不为空，就会抛出异常，所以Looper也无法更改。</p>
+<p>​    ThreadLocal全系统就只有一个，而Looper可以有多个，但是ThreadLocal可以有多个ThreadLocalMap，每个Map的key都是唯一的ThreadLocal，value就是对应线程的Looper。</p>
+<p>​    因此可以解释为什么一个线程只能有一个Looper和一个ThreadLocalMap了。</p>
+</li>
+<li><p>Looper.loop();</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	Message msg = queue.next()；</span><br><span class="line">    <span class="keyword">if</span> (msg == <span class="keyword">null</span>) &#123;</span><br><span class="line">      <span class="comment">// No message indicates that the message queue is quitting.</span></span><br><span class="line">      <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  msg.target.dispatchMessage(msg);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    在loop中会进入一个无限循环，不停的取出MessageQueue的队头消息，这个循环只有在msg为空的情况下才会跳出循环，而主线程的loop方法只有在程序退出时会结束。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">dispatchMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg.callback != <span class="keyword">null</span>) &#123;</span><br><span class="line">            handleCallback(msg);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (mCallback != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">if</span> (mCallback.handleMessage(msg)) &#123;</span><br><span class="line">                    <span class="keyword">return</span>;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">          handleMessage(msg);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后进入dispatchMessage，调入到handleMessage，流程结束。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h1 id="注意点"><a href="#注意点" class="headerlink" title="注意点"></a>注意点</h1><h2 id="消息沉睡唤醒机制"><a href="#消息沉睡唤醒机制" class="headerlink" title="消息沉睡唤醒机制"></a>消息沉睡唤醒机制</h2><p>​    在消息入队和消息出队时，都会有特殊情况的出现，比如队列为空，队列为满，虽然并没有处理队列为满的情况，但是在消息把内存占满的情况下。系统消息无法入队，就会造成手机卡死，所以handler不能用来做定时提醒。</p>
+<p>​    在两种情况下会造成阻塞：</p>
+<ul>
+<li>队列里没有消息时会无限阻塞，直到又有消息入队时会唤醒。</li>
+<li>队列里出队的消息需要延时执行，会阻塞到执行时间。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">int</span> nextPollTimeoutMillis = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span>(;;)&#123;</span><br><span class="line">    <span class="comment">//沉睡</span></span><br><span class="line">    nativePollOnce(ptr, nextPollTimeoutMillis);</span><br><span class="line">    <span class="comment">//进入循环遍历和等待操作</span></span><br><span class="line">    <span class="keyword">synchronized</span>(<span class="keyword">this</span>)&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (now &lt; msg.when) &#123;</span><br><span class="line">                        <span class="comment">// Next message is not ready.  Set a timeout to wake up when it is ready.</span></span><br><span class="line">                        nextPollTimeoutMillis = (<span class="keyword">int</span>) Math.min(msg.when - now, Integer.MAX_VALUE);</span><br><span class="line">                    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                        <span class="comment">// Got a message.</span></span><br><span class="line">                        mBlocked = <span class="keyword">false</span>;</span><br><span class="line">                        <span class="keyword">if</span> (prevMsg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                            prevMsg.next = msg.next;</span><br><span class="line">                        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                            mMessages = msg.next;</span><br><span class="line">                        &#125;</span><br><span class="line">                        msg.next = <span class="keyword">null</span>;</span><br><span class="line">                        <span class="keyword">if</span> (DEBUG) Log.v(TAG, <span class="string">"Returning message: "</span> + msg);</span><br><span class="line">                        msg.markInUse();</span><br><span class="line">                        <span class="keyword">return</span> msg;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">// No more messages.</span></span><br><span class="line">                    nextPollTimeoutMillis = -<span class="number">1</span>;</span><br><span class="line">                &#125;</span><br><span class="line">		&#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    这段代码是在一个无限循环中进行的，nextPollTimeoutMillis初始值为0，nativePollOnce沉睡，如果消息执行时间比现在的时间晚，就回计算出间隔时间，并且沉睡这么久，如果队列为空，就会赋值为-1，无限沉睡。</p>
+<p>​    唤醒函数是在插入新的消息时调用。</p>
+<h2 id="线程安全"><a href="#线程安全" class="headerlink" title="线程安全"></a>线程安全</h2><p>​    handler和Looper内部并没有关注线程安全，而是全部交给MessageQueue入队和出队时处理。</p>
+<p>​    在出队时，有一个内置对象锁，锁的是messageQueue对象，所以不同线程的handler发送和取出消息时，都会阻塞。</p>
+<p>​    同理，在入队时也会有一个内置对象锁，锁的是messageQueue对象。</p>
+<h2 id="子线程创建Handler"><a href="#子线程创建Handler" class="headerlink" title="子线程创建Handler"></a>子线程创建Handler</h2><p>​    如果在子线程中创建handler，需要自己执行Looper.prepare,Looper.loop函数，并且在队列为空时需要调用Looper.quit结束loop中的循环。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">quit</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	mQueue.quit(<span class="keyword">false</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//MessageQueue</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">quit</span><span class="params">(<span class="keyword">boolean</span> safe)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//在主线程中不允许quit操作</span></span><br><span class="line">	<span class="keyword">if</span> (!mQuitAllowed) &#123;</span><br><span class="line">    	<span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Main thread not allowed to quit."</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">    	<span class="keyword">if</span> (mQuitting) &#123;</span><br><span class="line">           <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//把 mQuitting设置为true</span></span><br><span class="line">        mQuitting = <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//移除消息队列中所有消息</span></span><br><span class="line">        <span class="keyword">if</span> (safe) &#123;</span><br><span class="line">        	removeAllFutureMessagesLocked();</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            removeAllMessagesLocked();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//唤醒next方法中的沉睡线程</span></span><br><span class="line">        <span class="comment">// We can assume mPtr != 0 because mQuitting was previously false.</span></span><br><span class="line">        nativeWake(mPtr);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    此时再进入next中的for循环，在<strong>if (mQuitting) {dispose();return null;}</strong>处返回null，再回到Looper.loop中，<strong>if (msg == null)  return;</strong>结束for循环，当前线程的Looper就停止运作。</p>
+<h2 id="内存泄露"><a href="#内存泄露" class="headerlink" title="内存泄露"></a>内存泄露</h2><ul>
+<li><p>为什么使用Handler会造成内存泄露？</p>
+<p>​    因为内部类调用外部类的方法或者变量，导致内部类持有外部类引用，匿名内部类持有Activity.this，而Message持有Handler，MessageQueue又持有Message，MessageQueue又是在Looper构造函数时创建的，每一个线程就只有一个MessageQueue，而Looper在线程还存活时就一直存在，所以当Activity需要被回收时，根据JVM可达性分析，GC下activity无法被回收，导致内存溢出。</p>
+<p><strong>Looper -&gt; MessageQueue -&gt; Message  -&gt; Handler -&gt;Activity.this</strong></p>
+</li>
+<li><p>为什么其他地方的内部类并不会有这种情况？</p>
+<p>因为handler和Activity生命周期不同，而其它地方生命周期相同，可以同时回收。</p>
+</li>
+</ul>
+<h2 id="Message怎么创建"><a href="#Message怎么创建" class="headerlink" title="Message怎么创建"></a>Message怎么创建</h2><ul>
+<li><p>一般是利用message.obtain方法创建</p>
+</li>
+<li><p>如果频繁的new Message()，会导致内存抖动，gc频繁造成卡顿，有可能OOM</p>
+</li>
+<li><p>如何处理？</p>
+<p>​    在loop中，msg.dispatchMessage被调用之后，会调用msg.recycleUnchecked()，把这个消息插入一个单链表的头部，在调用obtain时，将新的消息赋值给头部结点，将其取出。</p>
+<p>​    这样的好处就是把内存空间一直保留着，不会产生内存碎片，及内存抖动。</p>
+</li>
+</ul>
+<h2 id="loop的死循环阻塞为什么不会导致ANR"><a href="#loop的死循环阻塞为什么不会导致ANR" class="headerlink" title="loop的死循环阻塞为什么不会导致ANR"></a>loop的死循环阻塞为什么不会导致ANR</h2><ul>
+<li>ANR是当事件一段时间无响应时，通过handler新建一个ANR事件，去进行提醒</li>
+<li>ANR发生是因为事件一段时间无响应造成的</li>
+<li>而ANR本身也是一个事件</li>
+<li>而loop里的阻塞是因为没有事情干了，把CPU释放出来沉睡休息，完全没有关联</li>
+</ul>
+<h1 id="同步屏障"><a href="#同步屏障" class="headerlink" title="同步屏障"></a>同步屏障</h1><img src="/2020/10/19/handler/%E5%90%8C%E6%AD%A5%E5%B1%8F%E9%9A%9C.png" class title="同步屏障">
+
+<p>​    如果有需要立刻执行的消息，就可以先调用message.postSyncBarrier()方法发送同步屏障，插入到对头，这条消息的target为null。</p>
+<p>​    然后再把需要立刻执行的消息setAsynchronous(true)设置为异步消息，再send，然后在next方法中：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (msg != <span class="keyword">null</span> &amp;&amp; msg.target == <span class="keyword">null</span>) &#123;</span><br><span class="line">	<span class="comment">// Stalled by a barrier.  Find the next asynchronous message in the queue.</span></span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">    	prevMsg = msg;</span><br><span class="line">        msg = msg.next;</span><br><span class="line">    &#125; <span class="keyword">while</span> (msg != <span class="keyword">null</span> &amp;&amp; !msg.isAsynchronous());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    如果target==null，就直接找到最近的异步消息，立刻执行。</p>
+<p>​    这个机制在ui更新上应用很多，ui每16ms就会刷新一次，就是发送同步屏障和异步消息来实现。</p>
+<h1 id="HandlerThread"><a href="#HandlerThread" class="headerlink" title="HandlerThread"></a>HandlerThread</h1><p>用于方便的把Handler在子线程中使用，其继承于Thread，并且保证了线程安全。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        mTid = Process.myTid();</span><br><span class="line">        Looper.prepare();</span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            mLooper = Looper.myLooper();</span><br><span class="line">            notifyAll();</span><br><span class="line">        &#125;</span><br><span class="line">        Process.setThreadPriority(mPriority);</span><br><span class="line">        onLooperPrepared();</span><br><span class="line">        Looper.loop();</span><br><span class="line">        mTid = -<span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> Looper <span class="title">getLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (!isAlive()) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// If the thread has been started, wait until the looper has been created.</span></span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive() &amp;&amp; mLooper == <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    wait();</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> mLooper;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过对象锁和wait、notifyAll保证线程安全。</p>
+<p><strong>使用：</strong></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">HandlerThread handlerThread = <span class="keyword">new</span> HandlerThread(<span class="string">"xxxxxx"</span>);</span><br><span class="line">handlerThread.start();</span><br><span class="line">mHandler = <span class="keyword">new</span> Handler(handlerThread.getLooper());</span><br><span class="line">mHandler.sendMessage();</span><br></pre></td></tr></table></figure>
+
+<h1 id="IntentService"><a href="#IntentService" class="headerlink" title="IntentService"></a>IntentService</h1><p>用于后台服务处理一些异步消息。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onCreate</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>.onCreate();</span><br><span class="line">        HandlerThread thread = <span class="keyword">new</span> HandlerThread(<span class="string">"IntentService["</span> + mName + <span class="string">"]"</span>);</span><br><span class="line">        thread.start();</span><br><span class="line"></span><br><span class="line">        mServiceLooper = thread.getLooper();</span><br><span class="line">        mServiceHandler = <span class="keyword">new</span> ServiceHandler(mServiceLooper);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onStart</span><span class="params">(@Nullable Intent intent, <span class="keyword">int</span> startId)</span> </span>&#123;</span><br><span class="line">        Message msg = mServiceHandler.obtainMessage();</span><br><span class="line">        msg.arg1 = startId;</span><br><span class="line">        msg.obj = intent;</span><br><span class="line">        mServiceHandler.sendMessage(msg);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">ServiceHandler</span> <span class="keyword">extends</span> <span class="title">Handler</span> </span>&#123;</span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="title">ServiceHandler</span><span class="params">(Looper looper)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">super</span>(looper);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">handleMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">            onHandleIntent((Intent)msg.obj);</span><br><span class="line">            stopSelf(msg.arg1);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重写时重写onHandleIntent方法，进行异步任务，</p>
+<p>在OnCreate时利用HandlerThread获取handler，然后在onStart时发送消息，在处理消息时调用onHandleIntent，并且停止服务。</p>
+]]></content>
+  </entry>
+  <entry>
     <title>事件分发二级联动</title>
     <url>/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/</url>
     <content><![CDATA[<h2 id="1-事件分发流程"><a href="#1-事件分发流程" class="headerlink" title="1 事件分发流程"></a>1 事件分发流程</h2><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%872.png" class title="分发流程">
@@ -933,109 +933,6 @@
     <title>插件化换肤</title>
     <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
     <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
-  </entry>
-  <entry>
-    <title>自定义View</title>
-    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
-    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
-<ul>
-<li>布局：onMeasure , onLayout</li>
-<li>绘制: onDraw</li>
-<li>事件分发：onTouchEvent</li>
-</ul>
-<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
-<li>View类型：实现OnMeasure和OnDraw</li>
-<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
-</ul>
-<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
-<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
-<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
-<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
-</ol>
-<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
-<li><p>Android坐标系</p>
-<p>(1)以左上角为坐标原点</p>
-<p>(2)向右为x轴正方向，向下为y轴正方向</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
-</li>
-<li><p>View位置坐标系</p>
-<ul>
-<li><p>Top：子View上边界到父view上边界的距离</p>
-</li>
-<li><p>Left：子View左边界到父view左边界的距离</p>
-</li>
-<li><p>Bottom：子View下边距到父View上边界的距离</p>
-</li>
-<li><p>Right：子View右边界到父view左边界的距离</p>
-</li>
-</ul>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
-</li>
-<li><p>获取位置的方法</p>
-<ul>
-<li>调用get方法获取相对于父View的距离</li>
-<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
-</ul>
-</li>
-</ul>
-<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
-
-<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
-
-
-
-<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
-<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
-</li>
-<li><p>其中mode类型包括：</p>
-<ul>
-<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
-<li>EXACTLY：确切的大小，如：100dp</li>
-<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
-</ul>
-</li>
-</ul>
-<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
-<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
-<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
-<ul>
-<li><p>原理</p>
-<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
-
-
-
-</li>
-</ul>
-<p>  通俗易懂的一个例子：</p>
-  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
-
-<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
-<li><p>先度量孩子</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
-
-
-
-</li>
-</ul>
-<ul>
-<li><p>再度量自己</p>
-<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
-
-<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
-</li>
-</ul>
-<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
-
-<p>调用layout方法进行布局</p>
-<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
-<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
-<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
-]]></content>
   </entry>
   <entry>
     <title>数据结构与算法</title>
@@ -1712,6 +1609,109 @@
 <p>接下来就是代码实现:</p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//第一步构造next表</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] buildNext(String p)&#123;</span><br><span class="line">        <span class="comment">//构建next表就是查找真前缀 == 真后缀的最大长度，以获取模式串尽量多地往右移动</span></span><br><span class="line">        <span class="keyword">int</span>[] N = <span class="keyword">new</span> <span class="keyword">int</span>[p.length()];</span><br><span class="line">        <span class="keyword">int</span> m = p.length(),j = <span class="number">0</span>;<span class="comment">//主串位置</span></span><br><span class="line">        <span class="keyword">int</span> t = N[<span class="number">0</span>] = -<span class="number">1</span>;<span class="comment">//字串位置</span></span><br><span class="line">        <span class="keyword">while</span>(j &lt; m -<span class="number">1</span>)&#123;</span><br><span class="line">            <span class="keyword">if</span>(t &lt; <span class="number">0</span> || p.charAt(j) == p.charAt(t))&#123;</span><br><span class="line">                j++;t++;</span><br><span class="line">                N[j] = t;</span><br><span class="line">            &#125;<span class="keyword">else</span>&#123;<span class="comment">//失配</span></span><br><span class="line">                t = N[t];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> N;</span><br><span class="line">    &#125;</span><br><span class="line"><span class="comment">//第二步利用next表尽量多地往右移动</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">kmp</span><span class="params">(String s, String p)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span>[] next = buildNext(p);<span class="comment">// 调用next（String p）方法</span></span><br><span class="line">        <span class="keyword">int</span> index = -<span class="number">1</span>;<span class="comment">// 成功匹配的位置</span></span><br><span class="line">        <span class="keyword">int</span> sLength = s.length();<span class="comment">// 主串长度</span></span><br><span class="line">        <span class="keyword">int</span> pLength = p.length();<span class="comment">// 子串长度</span></span><br><span class="line">        <span class="keyword">if</span> (sLength &lt; pLength) &#123;</span><br><span class="line">            System.out.println(<span class="string">"Error.The main string is greater than the sub string length."</span>);</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">int</span> i = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">int</span> j = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">while</span> (i &lt; sLength &amp;&amp; j &lt; pLength) &#123;</span><br><span class="line">            <span class="comment">/*</span></span><br><span class="line"><span class="comment">             * 如果j = -1， 或者当前字符匹配成功（即s.charAt(i) == p.charAt(j)）， 都令i++，j++</span></span><br><span class="line"><span class="comment">             * 这两个条件能否交换次序？</span></span><br><span class="line"><span class="comment">             */</span></span><br><span class="line">            <span class="keyword">if</span> (j == -<span class="number">1</span> || s.charAt(i) == p.charAt(j)) &#123;</span><br><span class="line">                i++;</span><br><span class="line">                j++;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">/*</span></span><br><span class="line"><span class="comment">                 * 如果j != -1，且当前字符匹配失败， 则令 i 不变，j = next[j], next[j]即为j所对应的next值</span></span><br><span class="line"><span class="comment">                 */</span></span><br><span class="line">                j = next[j];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (j &gt;= pLength) &#123;<span class="comment">// 匹配成功</span></span><br><span class="line">            index = i - j;</span><br><span class="line">            System.out.println(<span class="string">"Successful match,index is:"</span> + index);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;<span class="comment">// 匹配失败</span></span><br><span class="line">            System.out.println(<span class="string">"Match failed."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
 
+]]></content>
+  </entry>
+  <entry>
+    <title>自定义View</title>
+    <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
+    <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
+<ul>
+<li>布局：onMeasure , onLayout</li>
+<li>绘制: onDraw</li>
+<li>事件分发：onTouchEvent</li>
+</ul>
+<h2 id="1-2-自定义View的分类"><a href="#1-2-自定义View的分类" class="headerlink" title="1.2 自定义View的分类"></a>1.2 自定义View的分类</h2><ul>
+<li>View类型：实现OnMeasure和OnDraw</li>
+<li>ViewGroup类型：实现OnMeasure和OnLayout</li>
+</ul>
+<h2 id="1-3-基础"><a href="#1-3-基础" class="headerlink" title="1.3 基础"></a>1.3 基础</h2><h3 id="1-3-1-构造函数"><a href="#1-3-1-构造函数" class="headerlink" title="1.3.1 构造函数"></a>1.3.1 构造函数</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 如果View是在Java代码里面new的，则调用第一个构造函数 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line"><span class="comment">// 如果View是在.xml里声明的，则调用第二个构造函数 </span></span><br><span class="line"><span class="comment">// 自定义属性是从AttributeSet参数传进来的 </span></span><br><span class="line">   <span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs); </span><br><span class="line">&#125; </span><br><span class="line"></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">super</span>(context, attrs, defStyleAttr); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//API21之后才使用 </span></span><br><span class="line"><span class="comment">// 不会自动调用 </span></span><br><span class="line"><span class="comment">// 一般是在第二个构造函数里主动调用 </span></span><br><span class="line"><span class="comment">// 如View有style属性时 </span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="title">CarsonView</span><span class="params">(Context context, AttributeSet attrs, <span class="keyword">int</span> defStyleAttr, <span class="keyword">int</span> defStyleRes&#123; </span></span></span><br><span class="line"><span class="function"><span class="params">    <span class="keyword">super</span>(context, attrs, defStyleAttr, defStyleRes)</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="1-3-2-View的视图结构"><a href="#1-3-2-View的视图结构" class="headerlink" title="1.3.2 View的视图结构"></a>1.3.2 View的视图结构</h3><ol>
+<li>PhoneWindow是Android系统中最基本的窗口系统，继承自Windows类，负责管理界面显示以及事件响应。它是Activity与View系统交互的接口。</li>
+<li>DecorView是PhoneWindow中的起始节点View，继承于View类，作为整个视图容器来使用。用于设置窗口属<br>性。它本质上是一个FrameLayout。</li>
+<li>ViewRoot在Activtiy启动时创建，负责管理、布局、渲染窗口UI等等。</li>
+</ol>
+<h3 id="1-3-3-坐标系"><a href="#1-3-3-坐标系" class="headerlink" title="1.3.3 坐标系"></a>1.3.3 坐标系</h3><ul>
+<li><p>Android坐标系</p>
+<p>(1)以左上角为坐标原点</p>
+<p>(2)向右为x轴正方向，向下为y轴正方向</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%872.png" class title="Android系统坐标系">
+</li>
+<li><p>View位置坐标系</p>
+<ul>
+<li><p>Top：子View上边界到父view上边界的距离</p>
+</li>
+<li><p>Left：子View左边界到父view左边界的距离</p>
+</li>
+<li><p>Bottom：子View下边距到父View上边界的距离</p>
+</li>
+<li><p>Right：子View右边界到父view左边界的距离</p>
+</li>
+</ul>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%873.png" class title="视图坐标系">
+</li>
+<li><p>获取位置的方法</p>
+<ul>
+<li>调用get方法获取相对于父View的距离</li>
+<li>在MotionEvent中，get方法获取相对于所在控件坐标系的位置，getRaw方法获取相对于系统坐标系的位置</li>
+</ul>
+</li>
+</ul>
+<h3 id="1-3-4-View绘制的生命周期"><a href="#1-3-4-View绘制的生命周期" class="headerlink" title="1.3.4 View绘制的生命周期"></a>1.3.4 View绘制的生命周期</h3><img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%874.png" class title="生命周期">
+
+<h3 id="1-3-5-View的层级结构"><a href="#1-3-5-View的层级结构" class="headerlink" title="1.3.5 View的层级结构"></a>1.3.5 View的层级结构</h3><p>​    View绘制是一个树形结构进行递归绘制，以DecorView为根结点。</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%871.png" class title="层级结构">
+
+
+
+<h2 id="1-4-MeasureSpec"><a href="#1-4-MeasureSpec" class="headerlink" title="1.4 MeasureSpec"></a>1.4 MeasureSpec</h2><ul>
+<li><p>MeasureSpec是一个int类型的变量，用于存储View的大小和模式信息，最高两位，即31，32位，存储mode信息，其余位数存储size信息。</p>
+</li>
+<li><p>其中mode类型包括：</p>
+<ul>
+<li>UNSPECIFIED：不对View大小做限制，系统使用</li>
+<li>EXACTLY：确切的大小，如：100dp</li>
+<li>AT_MOST：大小不可超过某数值，如：matchParent, 最大不能超过你爸爸</li>
+</ul>
+</li>
+</ul>
+<h2 id="1-5-LayoutParams"><a href="#1-5-LayoutParams" class="headerlink" title="1.5 LayoutParams"></a>1.5 LayoutParams</h2><p>​    LayoutParams的作用就是告诉父布局你自己的大小，可以通过LayoutParams获取到MeasureSpec。</p>
+<p>​    <strong>getChildMeasureSpec(int spec, int padding, int childDimension)</strong></p>
+<p>​    这个函数就是获取子布局的MeasureSpec的方法，第一个参数传入父布局的MeasureSpec，第三个就传入子布局LayoutParams中的width或者Height。</p>
+<ul>
+<li><p>原理</p>
+<img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%875.png" class title="规则">
+
+
+
+</li>
+</ul>
+<p>  通俗易懂的一个例子：</p>
+  <img src="/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/%E5%9B%BE%E7%89%876.png" class title="例子">
+
+<h2 id="1-6-流式布局绘制实战"><a href="#1-6-流式布局绘制实战" class="headerlink" title="1.6 流式布局绘制实战"></a>1.6 流式布局绘制实战</h2><h3 id="1-6-1-onMeasure"><a href="#1-6-1-onMeasure" class="headerlink" title="1.6.1 onMeasure"></a>1.6.1 onMeasure</h3><ul>
+<li><p>先度量孩子</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> childView = getChildAt(i)</span><br><span class="line"><span class="keyword">val</span> layoutParams = childView.layoutParams</span><br><span class="line"><span class="keyword">val</span> childWidthMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    widthMeasureSpec,</span><br><span class="line">                    paddingLeft + paddingRight,</span><br><span class="line">                    layoutParams.width</span><br><span class="line">                )</span><br><span class="line">                <span class="keyword">val</span> childHeightMeasureSpec = getChildMeasureSpec(</span><br><span class="line">                    heightMeasureSpec,</span><br><span class="line">                    paddingBottom + paddingTop,</span><br><span class="line">                    layoutParams.height</span><br><span class="line">                )</span><br><span class="line">childView.measure(childWidthMeasureSpec, childHeightMeasureSpec)</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<ul>
+<li><p>再度量自己</p>
+<figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> realWidth =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.EXACTLY) selfWidth <span class="keyword">else</span> maxLineWidth</span><br><span class="line"><span class="keyword">val</span> realHeight =</span><br><span class="line">            <span class="keyword">if</span> (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) selfHeight <span class="keyword">else</span> maxLineHeight</span><br><span class="line">setMeasuredDimension(realWidth, realHeight)</span><br></pre></td></tr></table></figure>
+
+<p>注意：度量自己的时候需要判断自己的mode，如果为EXACTLY，就直接使用自己的大小，不必使用孩子度量后的大小。</p>
+</li>
+</ul>
+<h3 id="1-6-2-onLayout"><a href="#1-6-2-onLayout" class="headerlink" title="1.6.2 onLayout"></a>1.6.2 onLayout</h3><figure class="highlight kotlin"><table><tr><td class="code"><pre><span class="line"><span class="keyword">val</span> left = curL</span><br><span class="line"><span class="keyword">val</span> top = curT</span><br><span class="line"><span class="keyword">val</span> right = left + view.measuredWidth</span><br><span class="line"><span class="keyword">val</span> bottom = top + view.measuredHeight</span><br><span class="line">view.layout(left, top, right, bottom)</span><br></pre></td></tr></table></figure>
+
+<p>调用layout方法进行布局</p>
+<h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
+<h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
+<h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
 ]]></content>
   </entry>
 </search>
