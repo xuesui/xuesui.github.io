@@ -55,7 +55,7 @@
 <meta property="og:image" content="http://yoursite.com/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E6%A1%B6%E6%8E%92%E5%BA%8F.png">
 <meta property="og:image" content="http://yoursite.com/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%9F%BA%E6%95%B0%E6%8E%92%E5%BA%8F.png">
 <meta property="article:published_time" content="2020-10-09T04:48:17.834Z">
-<meta property="article:modified_time" content="2020-10-15T08:47:32.592Z">
+<meta property="article:modified_time" content="2020-10-19T06:19:41.541Z">
 <meta property="article:author" content="xuesui">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:image" content="http://yoursite.com/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E9%A1%BA%E5%BA%8F%E8%A1%A8%E7%BB%A7%E6%89%BF%E5%85%B3%E7%B3%BB.png">
@@ -751,11 +751,65 @@
 <li><p>从平均时间来看，快速排序是效率最高的</p>
 </li>
 </ul>
+<h1 id="十、字符串"><a href="#十、字符串" class="headerlink" title="十、字符串"></a>十、字符串</h1><h2 id="1、定义："><a href="#1、定义：" class="headerlink" title="1、定义："></a>1、定义：</h2><p>串（string）是由零个或多个字符组成的有限序列，又名叫字符串。 </p>
+<ul>
+<li>一般地，由n个字符串构成的串记作:  <strong>S=”a<sub>0</sub>a<sub>1</sub>……a<sub>n-1</sub>“(n≥0),其中a_i（1≤i≤n）</strong><ul>
+<li>n是一个有限的数值</li>
+<li>串一般记为S是串的名称，用双引号或单引号括起来的字符序列是串的值（引号不属于串的内容）。</li>
+<li>可以是字母、数字或其他字符，i就是该字符在串中的位置。串中的字符数目n称为串的长度，n是一个有限的数值。</li>
+</ul>
+</li>
+</ul>
+<h2 id="2、特征："><a href="#2、特征：" class="headerlink" title="2、特征："></a>2、特征：</h2><ul>
+<li>结构简单，(以二进制字符为例，仅 0,1两种字符构成)</li>
+<li>规模庞大，</li>
+<li>元素(字符)重复率高</li>
+</ul>
+<h2 id="3、子串"><a href="#3、子串" class="headerlink" title="3、子串"></a>3、子串</h2><p>在对字符串S做处理时，经常需要取出其中某一连续的片段，称为S的子串(substring)</p>
+<ul>
+<li>具体地，由串S中起始于位置i的连续k个字符组成的子串记作<pre><code>**substr(S,i,k) = &quot;a&lt;sub&gt;i&lt;/sub&gt;a&lt;sub&gt;i+1&lt;/sub&gt;...a&lt;sub&gt;i+k-1&lt;/sub&gt;&quot;,0≤i 〈 n,0≤k**</code></pre></li>
+<li>前缀 <strong>prefix(S,k) = substr(S,0,k);</strong></li>
+<li>后缀 <strong>suffix(S,k) = substr(S,n-k,k)</strong></li>
+<li>空格串：只包含空格的串。 </li>
+</ul>
+<h2 id="4、结论"><a href="#4、结论" class="headerlink" title="4、结论"></a>4、结论</h2><ol>
+<li>空串是任何字符串的子串，也是任何字符串的前缀和后缀</li>
+<li>任何字符串都是自己的子串，也是自己的前缀和后缀。此类子串，前缀和后缀分别称为平凡子串，平凡前缀，平凡后缀</li>
+<li>字符串本身之外的所以非空子串，前缀，后缀，分别称为真子串，真前缀，真后缀</li>
+</ol>
+<h2 id="5、判等"><a href="#5、判等" class="headerlink" title="5、判等"></a>5、判等</h2><p>一对字符串S=”a<sub>0</sub>a<sub>1</sub>……a<sub>n-1</sub>“ 和 T=”b<sub>0</sub>b<sub>1</sub>……b<sub>m-1</sub>“,当且仅当二者长度相等(n=m),<br>且对应的字符分别相等(对任何0≤i 〈n,都有a<sub>i</sub> = b<sub>i</sub>)</p>
+<h2 id="6、模式匹配算法"><a href="#6、模式匹配算法" class="headerlink" title="6、模式匹配算法"></a>6、模式匹配算法</h2><h3 id="6-1-朴素的模式匹配算法-BF-Brute-Force-算法"><a href="#6-1-朴素的模式匹配算法-BF-Brute-Force-算法" class="headerlink" title="6.1 朴素的模式匹配算法(BF(Brute-Force)算法)"></a>6.1 朴素的模式匹配算法(BF(Brute-Force)算法)</h3><ul>
+<li>基本思想是：<ol>
+<li>从主串的第一个字符起与子串的第一个字符进行比较，若相等，则继续逐对字符进行后续的比较；</li>
+<li>若不相等，则从主串第二个字符起与子串的第一个字符重新比较，以此类推，<br>直到子串中每个字符依次和主串中的一个连续的字符序列相等为止，此时称为匹配成功。</li>
+<li>如果不能在主串中找到与子串相同的字符序列，则匹配失败。</li>
+</ol>
+</li>
+<li>BF算法是最原始、最暴力的求解过程，但也是其他匹配算法的基础</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">bruteForce</span><span class="params">(String s, String p)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> index = -<span class="number">1</span>;<span class="comment">// 成功匹配的位置</span></span><br><span class="line">        <span class="keyword">int</span> sLength = s.length();<span class="comment">// 主串长度</span></span><br><span class="line">        <span class="keyword">int</span> pLength = p.length();<span class="comment">// 子串长度</span></span><br><span class="line">        <span class="keyword">if</span> (sLength &lt; pLength) &#123;</span><br><span class="line">            System.out.println(<span class="string">"Error.The main string is greater than the sub string length."</span>);</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">int</span> i = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">int</span> j = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">while</span> (i &lt; sLength &amp;&amp; j &lt; pLength) &#123;</span><br><span class="line">            <span class="keyword">if</span> (s.charAt(i) == p.charAt(j)) &#123;<span class="comment">// 判断对应位置的字符是否相等</span></span><br><span class="line">                i++;<span class="comment">// 若相等，主串、子串继续依次比较</span></span><br><span class="line">                j++;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;<span class="comment">// 若不相等</span></span><br><span class="line">                i = i - j + <span class="number">1</span>;<span class="comment">// 主串回溯到上次开始匹配的下一个字符</span></span><br><span class="line">                j = <span class="number">0</span>;<span class="comment">// 子串从头开始重新匹配</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (j &gt;= pLength) &#123;<span class="comment">// 匹配成功</span></span><br><span class="line">            index = i - j;</span><br><span class="line">            System.out.println(<span class="string">"Successful match,index is:"</span> + index);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;<span class="comment">// 匹配失败</span></span><br><span class="line">            System.out.println(<span class="string">"Match failed."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="6-2-KMP"><a href="#6-2-KMP" class="headerlink" title="6.2 KMP"></a>6.2 KMP</h3><p>P模式匹配算法，是一个效率非常高的字符串匹配算法。其全称是Knuth–Morris–Pratt string searching algorithm</p>
+<ul>
+<li>其核心思想就是主串不回溯，模式串尽量多地往右移动</li>
+<li>即: <strong>N(P, j) = {t | prefix(prefix(P, j), t) = suffix(prefix(P, j), t), 0≤ t 〈 j } shift = j -t</strong> shift就是本次移动<br>地最大步长</li>
+</ul>
+<p><strong>构建next表</strong></p>
+<ol>
+<li>因为空串是任何非空串的真字串，真前缀，真后缀，故只要 j &gt; 0,则必有 <strong>0 ∈ N(P, j)</strong>。<br>此时<strong>N(P, j)</strong> 必非空，从而保证“在其中取最大值”这一操作可行。反之。若j=0,则前缀prefix(P， j)<br>本身就是空串，它没有真子串，于是必有集合<strong>N(P, j) = φ</strong>。此种情况下，<strong>next[0]</strong> 该如何定义呢？</li>
+<li>按照串匹配算法的构思，倘若某轮迭代中第一对字符即失配，则应该将模式串P直接右移一位，然后从其首字符继续下一轮对比<br>就实际效果而言，这一处理方法完全等价于“令<strong>next[0] = -1</strong>”。    </li>
+<li>下面以模式串 <strong>“ABCDABD”</strong>  为例来详细说明是如何构建<strong>next表</strong>的   </li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line">P &#x3D; ABCDABD</span><br><span class="line">j &#x3D; 0, prefix(P, 0) &#x3D; φ</span><br><span class="line">next[0] &#x3D; -1;&#x2F;&#x2F;规定如此</span><br><span class="line"></span><br><span class="line">P &#x3D; ABCDABD</span><br><span class="line">j &#x3D; 1, prefix(P, 1) &#x3D; A</span><br><span class="line">真前缀: φ</span><br><span class="line">真后缀: φ</span><br><span class="line">next[1] &#x3D; 0;</span><br><span class="line"></span><br><span class="line">P &#x3D; ABCDABD</span><br><span class="line">j &#x3D; 2, prefix(P, 2) &#x3D; AB</span><br><span class="line">真前缀: A</span><br><span class="line">真后缀: B</span><br><span class="line">next[2] &#x3D; 0;</span><br><span class="line"></span><br><span class="line">P &#x3D; ABCDABD</span><br><span class="line">j &#x3D; 3, prefix(P, 3) &#x3D; ABC</span><br><span class="line">真前缀: A,AB</span><br><span class="line">真后缀: BC,C</span><br><span class="line">next[3] &#x3D; 0;</span><br><span class="line"></span><br><span class="line">P &#x3D; ABCDABD</span><br><span class="line">j &#x3D; 4, prefix(P, 4) &#x3D; ABCD</span><br><span class="line">真前缀: A,AB,ABC</span><br><span class="line">真后缀: BCD,CD,D</span><br><span class="line">next[4] &#x3D; 0;</span><br><span class="line"></span><br><span class="line">P &#x3D; ABCDABD</span><br><span class="line">j &#x3D; 5, prefix(P, 5) &#x3D; ABCDA</span><br><span class="line">真前缀: A,AB,ABC,ABCD</span><br><span class="line">真后缀: BCDA,CDA,DA,A</span><br><span class="line">next[5] &#x3D; 1;</span><br><span class="line"></span><br><span class="line">P &#x3D; ABCDABD</span><br><span class="line">j &#x3D; 6, prefix(P, 6) &#x3D; ABCDAB</span><br><span class="line">真前缀: A,AB,ABC,ABCD,ABCDA</span><br><span class="line">真后缀: BCDAB,CDAB,DAB,AB,B</span><br><span class="line">next[6] &#x3D; 2;</span><br><span class="line"></span><br><span class="line">得出next表为:</span><br><span class="line">[-1, 0, 0, 0, 0, 1, 2]</span><br></pre></td></tr></table></figure>
+
+<p>接下来就是代码实现:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//第一步构造next表</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] buildNext(String p)&#123;</span><br><span class="line">        <span class="comment">//构建next表就是查找真前缀 == 真后缀的最大长度，以获取模式串尽量多地往右移动</span></span><br><span class="line">        <span class="keyword">int</span>[] N = <span class="keyword">new</span> <span class="keyword">int</span>[p.length()];</span><br><span class="line">        <span class="keyword">int</span> m = p.length(),j = <span class="number">0</span>;<span class="comment">//主串位置</span></span><br><span class="line">        <span class="keyword">int</span> t = N[<span class="number">0</span>] = -<span class="number">1</span>;<span class="comment">//字串位置</span></span><br><span class="line">        <span class="keyword">while</span>(j &lt; m -<span class="number">1</span>)&#123;</span><br><span class="line">            <span class="keyword">if</span>(t &lt; <span class="number">0</span> || p.charAt(j) == p.charAt(t))&#123;</span><br><span class="line">                j++;t++;</span><br><span class="line">                N[j] = t;</span><br><span class="line">            &#125;<span class="keyword">else</span>&#123;<span class="comment">//失配</span></span><br><span class="line">                t = N[t];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> N;</span><br><span class="line">    &#125;</span><br><span class="line"><span class="comment">//第二步利用next表尽量多地往右移动</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">kmp</span><span class="params">(String s, String p)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span>[] next = buildNext(p);<span class="comment">// 调用next（String p）方法</span></span><br><span class="line">        <span class="keyword">int</span> index = -<span class="number">1</span>;<span class="comment">// 成功匹配的位置</span></span><br><span class="line">        <span class="keyword">int</span> sLength = s.length();<span class="comment">// 主串长度</span></span><br><span class="line">        <span class="keyword">int</span> pLength = p.length();<span class="comment">// 子串长度</span></span><br><span class="line">        <span class="keyword">if</span> (sLength &lt; pLength) &#123;</span><br><span class="line">            System.out.println(<span class="string">"Error.The main string is greater than the sub string length."</span>);</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">int</span> i = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">int</span> j = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">while</span> (i &lt; sLength &amp;&amp; j &lt; pLength) &#123;</span><br><span class="line">            <span class="comment">/*</span></span><br><span class="line"><span class="comment">             * 如果j = -1， 或者当前字符匹配成功（即s.charAt(i) == p.charAt(j)）， 都令i++，j++</span></span><br><span class="line"><span class="comment">             * 这两个条件能否交换次序？</span></span><br><span class="line"><span class="comment">             */</span></span><br><span class="line">            <span class="keyword">if</span> (j == -<span class="number">1</span> || s.charAt(i) == p.charAt(j)) &#123;</span><br><span class="line">                i++;</span><br><span class="line">                j++;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">/*</span></span><br><span class="line"><span class="comment">                 * 如果j != -1，且当前字符匹配失败， 则令 i 不变，j = next[j], next[j]即为j所对应的next值</span></span><br><span class="line"><span class="comment">                 */</span></span><br><span class="line">                j = next[j];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (j &gt;= pLength) &#123;<span class="comment">// 匹配成功</span></span><br><span class="line">            index = i - j;</span><br><span class="line">            System.out.println(<span class="string">"Successful match,index is:"</span> + index);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;<span class="comment">// 匹配失败</span></span><br><span class="line">            System.out.println(<span class="string">"Match failed."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
 
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" data-id="ckgakyvmr000764vb6klxao3b" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/" data-id="ckghp6lgo000a6svbb37k228b" class="article-share-link">Share</a>
       
       
     </footer>
@@ -763,6 +817,15 @@
   
     
 <nav id="article-nav">
+  
+    <a href="/2020/10/19/handler/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          handler
+        
+      </div>
+    </a>
   
   
     <a href="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/" id="article-nav-older" class="article-nav-link-wrap">
@@ -804,6 +867,10 @@
       <ul>
         
           <li>
+            <a href="/2020/10/19/handler/">handler</a>
+          </li>
+        
+          <li>
             <a href="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
           </li>
         
@@ -817,10 +884,6 @@
         
           <li>
             <a href="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/">事件分发二级联动</a>
-          </li>
-        
-          <li>
-            <a href="/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/">插件化换肤</a>
           </li>
         
       </ul>
