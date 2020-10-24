@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+
+  
+  <title>binder | xuesui的个人博客</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="Binder是什么？ 一种进程间通信机制 驱动(&#x2F;dev&#x2F;binder) Binder.java -&gt;实现IBinder进行进程间通信    进程间通信 为什么要使用多进程？ 因为一个进程只会分配几百兆的内存，而且进程间是隔离的，可以起到扩大内存以及进程安全的作用。  Binder有什么优势？ Linux进程通信机制：Binder、内存共享、Socket等等，     Binder 共享内存">
+<meta property="og:type" content="article">
+<meta property="og:title" content="binder">
+<meta property="og:url" content="http://yoursite.com/2020/10/22/binder/index.html">
+<meta property="og:site_name" content="xuesui的个人博客">
+<meta property="og:description" content="Binder是什么？ 一种进程间通信机制 驱动(&#x2F;dev&#x2F;binder) Binder.java -&gt;实现IBinder进行进程间通信    进程间通信 为什么要使用多进程？ 因为一个进程只会分配几百兆的内存，而且进程间是隔离的，可以起到扩大内存以及进程安全的作用。  Binder有什么优势？ Linux进程通信机制：Binder、内存共享、Socket等等，     Binder 共享内存">
+<meta property="og:image" content="http://yoursite.com/2020/10/22/binder/Binder.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/22/binder/%E5%86%85%E5%AD%98%E7%A9%BA%E9%97%B4.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/22/binder/Binder%E4%BC%A0%E8%BE%93%E6%95%B0%E6%8D%AE.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/22/binder/%E5%86%99%E6%96%87%E4%BB%B6%E6%B5%81%E7%A8%8B.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/22/binder/%E9%A9%B1%E5%8A%A8.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/22/binder/%E9%A9%B1%E5%8A%A8%E6%B5%81%E7%A8%8B.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/22/binder/SM%E4%BD%9C%E7%94%A8.png">
+<meta property="article:published_time" content="2020-10-22T07:16:10.663Z">
+<meta property="article:modified_time" content="2020-10-24T02:08:51.445Z">
+<meta property="article:author" content="xuesui">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yoursite.com/2020/10/22/binder/Binder.png">
+  
+    <link rel="alternate" href="/atom.xml" title="xuesui的个人博客" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 4.2.1"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">xuesui的个人博客</a>
+      </h1>
+      
+        <h2 id="subtitle-wrap">
+          <a href="/" id="subtitle">xuesui</a>
+        </h2>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-binder" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/10/22/binder/" class="article-date">
+  <time datetime="2020-10-22T07:16:10.663Z" itemprop="datePublished">2020-10-22</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 class="article-title" itemprop="name">
+      binder
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="Binder是什么？"><a href="#Binder是什么？" class="headerlink" title="Binder是什么？"></a>Binder是什么？</h1><ul>
+<li>一种进程间通信机制</li>
+<li>驱动(/dev/binder)</li>
+<li>Binder.java -&gt;实现IBinder进行进程间通信</li>
+</ul>
+<img src="/2020/10/22/binder/Binder.png" class title="Binder">
+
+<h1 id="进程间通信"><a href="#进程间通信" class="headerlink" title="进程间通信"></a>进程间通信</h1><ul>
+<li><p>为什么要使用多进程？</p>
+<p>因为一个进程只会分配几百兆的内存，而且进程间是隔离的，可以起到扩大内存以及进程安全的作用。</p>
+</li>
+<li><p>Binder有什么优势？</p>
+<p>Linux进程通信机制：Binder、内存共享、Socket等等，</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Binder</th>
+<th>共享内存</th>
+<th>Socket</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>性能</td>
+<td>只用拷贝一次</td>
+<td>拷贝0次</td>
+<td>拷贝两次</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>基于C/S架构，易用性高</td>
+<td>控制复杂，易用性差（需要处理同步问题）</td>
+<td>基于C/S架构，但是是通用接口，传输效率低，开销大</td>
+</tr>
+<tr>
+<td>安全性</td>
+<td>为每个APP分配UID，支持实名和匿名</td>
+<td>依赖上层协议，访问接入点是开放的，不安全</td>
+<td>依赖上层协议，访问接入点是开放的，不安全</td>
+</tr>
+</tbody></table>
+</li>
+<li><p>Binder怎么做到一次拷贝？</p>
+<ul>
+<li><p>进程间如何进行通信？</p>
+<ul>
+<li><p>内存空间：</p>
+<img src="/2020/10/22/binder/%E5%86%85%E5%AD%98%E7%A9%BA%E9%97%B4.png" class title="内存空间">
+
+<p>​    内存被操作系统划分成两块：用户空间和内核空间，用户空间是用户程序代码运行的地方，内核空间是内核代码运行的地方。为了安全，它们是隔离的，即使用户的程序崩溃了，内核也不受影响。</p>
+<p>​    并且能够直接操作的都是虚拟空间，每个虚拟空间都会映射一个物理空间，作为真正能够存储东西的地方。</p>
+</li>
+<li><p>传统IPC传输数据</p>
+<p>​    通过发送方对用户空间的内容进行拷贝，然后copy_from_user放到内核空间，然后接收方再从内核空间copy_to_user拷贝到接收方的用户空间。</p>
+<p>​    会进行两次拷贝。</p>
+</li>
+</ul>
+</li>
+<li><p>Binder传输数据</p>
+<img src="/2020/10/22/binder/Binder%E4%BC%A0%E8%BE%93%E6%95%B0%E6%8D%AE.png" class title="Binder传输数据">
+
+<p>​    发送方通过<strong>copy_from_user</strong>（这个方法是在驱动层调用的）把数据从用户空间拷贝到内核空间，接收方通过mmap让他的用户空间指向的物理内存为内核空间指向的物理内存，这样一来，只要操作内核空间，接收方也会收到。</p>
+</li>
+<li><p>mmap原理</p>
+<p>​    Linux通过将一个虚拟内存区域与一个磁盘上的对象关联起来，以初始化这个虚拟内存区域的内容，这个过程称为内存映射(memory mapping)。</p>
+<p>​    所有的系统资源管理都是在内核空间中完成的。比如读写磁盘文件，分配回收内存，从网络接口读写数据等等。用户空间通过系统调用让内核空间完成这些功能。</p>
+<img src="/2020/10/22/binder/%E5%86%99%E6%96%87%E4%BB%B6%E6%B5%81%E7%A8%8B.png" class title="写文件流程">
+
+</li>
+</ul>
+</li>
+</ul>
+<h1 id="驱动"><a href="#驱动" class="headerlink" title="驱动"></a>驱动</h1><img src="/2020/10/22/binder/%E9%A9%B1%E5%8A%A8.png" class title="驱动">
+
+<p>驱动流程：</p>
+<img src="/2020/10/22/binder/%E9%A9%B1%E5%8A%A8%E6%B5%81%E7%A8%8B.png" class title="驱动流程">
+
+<h2 id="1、binder-init"><a href="#1、binder-init" class="headerlink" title="1、binder_init"></a>1、binder_init</h2><ul>
+<li><p>设备驱动入口函数：device_initcall(binder_init);</p>
+</li>
+<li><p>创建名为binder的单线程工作队列：binder_deferred_workqueue = create_singlethread_workqueue(“binder”);</p>
+</li>
+<li><p>为binder设备分配内存：binder_device = kzalloc(sizeof(*binder_device), GFP_KERNEL);</p>
+</li>
+<li><p>初始化设备：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">binder_device-&gt;miscdev.fops = &amp;binder_fops;</span><br><span class="line">binder_device-&gt;miscdev.minor = MISC_DYNAMIC_MINOR;</span><br><span class="line">binder_device-&gt;miscdev.name = name;</span><br><span class="line"></span><br><span class="line">binder_device-&gt;context.binder_context_mgr_uid = INVALID_UID;</span><br><span class="line">binder_device-&gt;context.name = name;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>binder驱动用的是misc设备，没有硬件，只是一个内存，注册简单。</p>
+<p>misc驱动注册：ret = misc_register(&amp;binder_device-&gt;miscdev);</p>
+</li>
+<li><p>将hlist节点添加到binder_devices为表头的设备链表：hlist_add_head(&amp;binder_device-&gt;hlist, &amp;binder_devices);</p>
+</li>
+</ul>
+<p><strong>总结一下就分为三大步：</strong></p>
+<ul>
+<li>分配内存：1~3</li>
+<li>初始化设备：4~5</li>
+<li>放入binder_devices链表：6</li>
+</ul>
+<h2 id="2、binder-open"><a href="#2、binder-open" class="headerlink" title="2、binder_open"></a>2、binder_open</h2><ul>
+<li><p>为binder_proc结构体在kernel分配内存空间：proc = kzalloc(sizeof(*proc), GFP_KERNEL);</p>
+</li>
+<li><p>将当前进程的task保存到binder进程的tsk：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">get_task_struct(current);</span><br><span class="line">proc-&gt;tsk = current; </span><br><span class="line">INIT_LIST_HEAD(&amp;proc-&gt;todo); <span class="comment">// 初始化todo列表</span></span><br><span class="line">init_waitqueue_head(&amp;proc-&gt;wait); <span class="comment">// 初始化wait队列 </span></span><br><span class="line">proc-&gt;default_priority = task_nice(current); <span class="comment">// 将当前进程的nice值转换为进程优先级</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>同步锁，因为binder支持多线程访问：</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">binder_lock(__func__);</span><br><span class="line"></span><br><span class="line">binder_stats_created(BINDER_STAT_PROC); <span class="comment">// binder_proc对象创建数加1 </span></span><br><span class="line">hlist_add_head(&amp;proc-&gt;proc_node, &amp;binder_procs); <span class="comment">// 将proc_node节点添加到binder_procs的队列头部 </span></span><br><span class="line">proc-&gt;pid = current-&gt;group_leader-&gt;pid; <span class="comment">// 进程pid </span></span><br><span class="line">INIT_LIST_HEAD(&amp;proc-&gt;delivered_death); <span class="comment">// 初始化已分发的死亡通知列表 </span></span><br><span class="line">filp-&gt;private_data = proc; <span class="comment">// 将这个binder_proc与filp关联起来，这样下次通过filp就能找 到这个proc了</span></span><br><span class="line"></span><br><span class="line">binder_unlock(__func__); <span class="comment">// 释放同步锁</span></span><br></pre></td></tr></table></figure>
+
+</li>
+</ul>
+<p><strong>总结一下就分为以下几步：</strong></p>
+<ul>
+<li>创建binder_proc对象：1</li>
+<li>保存当前进程信息：2</li>
+<li>将这个binder_proc放到binder_procs链表头部：3</li>
+<li>将这个binder_proc与filp关联起来，这样下次通过filp就能找 到这个proc了：3</li>
+</ul>
+<h2 id="3、binder-mmap"><a href="#3、binder-mmap" class="headerlink" title="3、binder_mmap"></a>3、binder_mmap</h2><ul>
+<li><p>内核的虚拟内存：struct vm_struct *area;</p>
+</li>
+<li><p>进程的虚拟内存vma，保证映射内存不大于4M</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> ((vma-&gt;vm_end - vma-&gt;vm_start) &gt; SZ_4M)</span><br><span class="line">	vma-&gt;vm_end = vma-&gt;vm_start + SZ_4M;</span><br></pre></td></tr></table></figure>
+
+<p>注意：驱动的映射内存不超过4M，但是Binder层不超过1M-8K，所以intent传递最大时1M-8K，因为intent是通过Binder来传递。</p>
+</li>
+</ul>
+<p><strong>总结：</strong></p>
+<ul>
+<li>通过用户空间的虚拟内存大小分配一块内核的虚拟内存</li>
+<li>分配了一块物理内存  — 4KB</li>
+<li>把这块物理内存分别映射到用户空间的虚拟内存和内核的虚拟内存—1M</li>
+</ul>
+<h2 id="4、binder-ioctl"><a href="#4、binder-ioctl" class="headerlink" title="4、binder_ioctl"></a>4、binder_ioctl</h2><ul>
+<li><p>根据当前进程的pid，从binder_proc中查找binder_thread, 如果当前线程已经加入到proc的线程队列则直接返回， 如果不存在则创建binder_thread，并将当前线程添加到当前的proc 。</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">thread = binder_get_thread(proc);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>进行binder的读写操作</p>
+<figure class="highlight c++"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">binder_ioctl_write_read</span><span class="params">(struct file *filp, <span class="keyword">unsigned</span> <span class="keyword">int</span> cmd, <span class="keyword">unsigned</span> <span class="keyword">long</span> arg, struct binder_thread *thread)</span></span>&#123;</span><br><span class="line">    <span class="comment">// 3150 把用户空间数据ubuf拷贝到bwr </span></span><br><span class="line">    <span class="keyword">if</span> (copy_from_user(&amp;bwr, ubuf, <span class="keyword">sizeof</span>(bwr))) &#123; </span><br><span class="line">        <span class="keyword">if</span> (bwr.write_size &gt; <span class="number">0</span>) &#123; </span><br><span class="line">            <span class="comment">// 当写缓存中有数据，则执行binder写操作 </span></span><br><span class="line">            ret = binder_thread_write(proc, thread, bwr.write_buffer, bwr.write_size, &amp;bwr.write_consumed); </span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (bwr.read_size &gt; <span class="number">0</span>) &#123; </span><br><span class="line">            <span class="comment">// 当读缓存中有数据，则执行binder读操作 </span></span><br><span class="line">            ret = binder_thread_read(proc, thread, bwr.read_buffer, bwr.read_size, &amp;bwr.read_consumed, filp-&gt;f_flags &amp; O_NONBLOCK); </span><br><span class="line">            <span class="comment">// 进程todo队列不为空,则唤醒该队列中的线程 </span></span><br><span class="line">            <span class="keyword">if</span> (!list_empty(&amp;proc-&gt;todo)) wake_up_interruptible(&amp;proc-&gt;wait); </span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//把内核空间数据bwr拷贝到ubuf </span></span><br><span class="line">        <span class="keyword">if</span> (copy_to_user(ubuf, &amp;bwr, <span class="keyword">sizeof</span>(bwr)))</span><br></pre></td></tr></table></figure>
+
+
+
+
+</li>
+</ul>
+<h1 id="Service-manager"><a href="#Service-manager" class="headerlink" title="Service_manager"></a>Service_manager</h1><h2 id="1、作用"><a href="#1、作用" class="headerlink" title="1、作用"></a>1、作用</h2><p>​    管理系统服务，将系统服务的Ibinder递交给客户端，就是一个管家的身份，SM本身也是一个系统服务。</p>
+<p>​    因为系统服务很多，客户端直接去拿会很麻烦，所以有了Service_manager，他的handler值为0，客户端只用去找handler值为0的服务就好。</p>
+<img src="/2020/10/22/binder/SM%E4%BD%9C%E7%94%A8.png" class title="SM作用">
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2020/10/22/binder/" data-id="ckgn1p68d00024cvb8yahaugo" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2020/10/19/handler/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">handler</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/10/">October 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/09/">September 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/08/">August 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/07/">July 2020</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/10/22/binder/">binder</a>
+          </li>
+        
+          <li>
+            <a href="/2020/10/19/handler/">handler</a>
+          </li>
+        
+          <li>
+            <a href="/2020/10/09/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法</a>
+          </li>
+        
+          <li>
+            <a href="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/">java虚拟机</a>
+          </li>
+        
+          <li>
+            <a href="/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/">RecyclerView回收复用机制</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 xuesui<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+
+  
+<script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+  </div>
+</body>
+</html>
