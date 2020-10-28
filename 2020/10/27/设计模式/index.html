@@ -7,16 +7,32 @@
   
   <title>设计模式 | xuesui的个人博客</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="description" content="xuesui的个人博客">
+  <meta name="description" content="一、设计模式六大原则 单一职责原则：一个类就只负责一个工作 里氏替换原则：子类可以拓展功能，但是不要替换父类的功能 依赖倒置原则：面向接口编程 迪米特法则：耦合度降低，不能在方法中新增没有的类 开闭原则：对扩展开放，对修改关闭，即新增功能时最好不要修改原有代码 接口隔离原则：接口功能要最小单元化  二、设计模式1、简单工厂模式  2、工厂方法模式  ​    当水果数量越来越多时，简单工厂模式会越">
 <meta property="og:type" content="article">
 <meta property="og:title" content="设计模式">
 <meta property="og:url" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/index.html">
 <meta property="og:site_name" content="xuesui的个人博客">
-<meta property="og:description" content="xuesui的个人博客">
-<meta property="article:published_time" content="2020-10-27T01:07:38.000Z">
-<meta property="article:modified_time" content="2020-10-27T01:07:38.309Z">
+<meta property="og:description" content="一、设计模式六大原则 单一职责原则：一个类就只负责一个工作 里氏替换原则：子类可以拓展功能，但是不要替换父类的功能 依赖倒置原则：面向接口编程 迪米特法则：耦合度降低，不能在方法中新增没有的类 开闭原则：对扩展开放，对修改关闭，即新增功能时最好不要修改原有代码 接口隔离原则：接口功能要最小单元化  二、设计模式1、简单工厂模式  2、工厂方法模式  ​    当水果数量越来越多时，简单工厂模式会越">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AE%80%E5%8D%95%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%B7%A5%E5%8E%82%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%8A%BD%E8%B1%A1%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%BB%BA%E9%80%A0%E8%80%85%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E9%80%82%E9%85%8D%E5%99%A8%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A1%A5%E6%8E%A5%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A3%85%E9%A5%B0%E5%99%A8%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%A4%96%E8%A7%82%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%91%BD%E4%BB%A4%E6%A8%A1%E5%BC%8F.png">
+<meta property="og:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%AE%BF%E9%97%AE%E8%80%85%E6%A8%A1%E5%BC%8F.png">
+<meta property="article:published_time" content="2020-10-27T01:07:38.309Z">
+<meta property="article:modified_time" content="2020-10-28T07:37:17.904Z">
 <meta property="article:author" content="xuesui">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AE%80%E5%8D%95%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png">
   
     <link rel="alternate" href="/atom.xml" title="xuesui的个人博客" type="application/atom+xml">
   
@@ -72,7 +88,7 @@
         <section id="main"><article id="post-设计模式" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
     <a href="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" class="article-date">
-  <time datetime="2020-10-27T01:07:38.000Z" itemprop="datePublished">2020-10-27</time>
+  <time datetime="2020-10-27T01:07:38.309Z" itemprop="datePublished">2020-10-27</time>
 </a>
     
   </div>
@@ -91,11 +107,80 @@
     
     <div class="article-entry" itemprop="articleBody">
       
-        
+        <h1 id="一、设计模式六大原则"><a href="#一、设计模式六大原则" class="headerlink" title="一、设计模式六大原则"></a>一、设计模式六大原则</h1><ul>
+<li>单一职责原则：一个类就只负责一个工作</li>
+<li>里氏替换原则：子类可以拓展功能，但是不要替换父类的功能</li>
+<li>依赖倒置原则：面向接口编程</li>
+<li>迪米特法则：耦合度降低，不能在方法中新增没有的类</li>
+<li>开闭原则：对扩展开放，对修改关闭，即新增功能时最好不要修改原有代码</li>
+<li>接口隔离原则：接口功能要最小单元化</li>
+</ul>
+<h1 id="二、设计模式"><a href="#二、设计模式" class="headerlink" title="二、设计模式"></a>二、设计模式</h1><h2 id="1、简单工厂模式"><a href="#1、简单工厂模式" class="headerlink" title="1、简单工厂模式"></a>1、简单工厂模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AE%80%E5%8D%95%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="简单工厂模式">
+
+<h2 id="2、工厂方法模式"><a href="#2、工厂方法模式" class="headerlink" title="2、工厂方法模式"></a>2、工厂方法模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%B7%A5%E5%8E%82%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="工厂方法模式">
+
+<p>​    当水果数量越来越多时，简单工厂模式会越来越复杂，违背了单一职责原则、开闭原则，所以需要把每个水果单一创建一个工厂。</p>
+<h2 id="3、抽象工厂模式"><a href="#3、抽象工厂模式" class="headerlink" title="3、抽象工厂模式"></a>3、抽象工厂模式</h2><p>​    工厂方法模式有一个缺点，就是当新加入了一个工厂后，同一个对象可能会调用出现错误，为了避免这种错误，可以使用抽象工厂模式。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%8A%BD%E8%B1%A1%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="抽象工厂模式">
+
+<h2 id="4、建造者模式"><a href="#4、建造者模式" class="headerlink" title="4、建造者模式"></a>4、建造者模式</h2><p>​    建造者模式实际上也是工厂模式的一种，Builder就是一个工厂，它和工厂模式的不同之处就在于它是有一个模板的，所有事情都会按照这个模板来进行。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%BB%BA%E9%80%A0%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="建造者模式">
+
+<h2 id="5、工厂模式总结"><a href="#5、工厂模式总结" class="headerlink" title="5、工厂模式总结"></a>5、工厂模式总结</h2><ul>
+<li>原则<ul>
+<li>解耦：把对象的创建和使用的过程分开</li>
+<li>工厂负责对象的创建，包括其init方法的调用，黑盒创建过程</li>
+<li>面向接口编程： 使用者只管使用，只知其接口而不知其实现类</li>
+</ul>
+</li>
+<li>对比<ul>
+<li>静态工厂：把所有对象的创建逻辑集中到一个（专业）类里处理</li>
+<li>工厂方法模式：一个工厂负责创建一个产品类的创建</li>
+<li>将一个系列的产品的工厂合并成一个工厂，负责生产这个系列的产品</li>
+<li>对象的创建比较复杂时，按步骤一块块创建，让创建过程模板化</li>
+</ul>
+</li>
+</ul>
+<h2 id="6、单例模式"><a href="#6、单例模式" class="headerlink" title="6、单例模式"></a>6、单例模式</h2><p>​    分为懒汉式和饿汉式，懒汉式就是在要用的时候再初始化，需要加锁。</p>
+<p>​    还有静态内部类实现单例，这种方法是因为类加载时不会立即加载内部类，在用到时才会加载，并且也保证了线程安全。</p>
+<h2 id="7、适配器模式"><a href="#7、适配器模式" class="headerlink" title="7、适配器模式"></a>7、适配器模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E9%80%82%E9%85%8D%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="适配器模式">
+
+<h2 id="8、桥接模式"><a href="#8、桥接模式" class="headerlink" title="8、桥接模式"></a>8、桥接模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A1%A5%E6%8E%A5%E6%A8%A1%E5%BC%8F.png" class title="桥接模式">
+
+<p>适配器模式是为了合并，桥接模式是为了分离。</p>
+<h2 id="9、装饰器模式"><a href="#9、装饰器模式" class="headerlink" title="9、装饰器模式"></a>9、装饰器模式</h2><p>动态地给一个对象增加一些额外的职责，为的是功能增强。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A3%85%E9%A5%B0%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="装饰器模式">
+
+<h2 id="10、代理模式"><a href="#10、代理模式" class="headerlink" title="10、代理模式"></a>10、代理模式</h2><p>一个类代表另一个类的功能。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F.png" class title="代理模式">
+
+<h2 id="11、组合模式"><a href="#11、组合模式" class="headerlink" title="11、组合模式"></a>11、组合模式</h2><p>把一组相似的对象当作一个单一的对象，为的是减少数据类型。</p>
+
+
+<h2 id="12、外观模式"><a href="#12、外观模式" class="headerlink" title="12、外观模式"></a>12、外观模式</h2><p>糅合功能，对外只提供一个入口。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%A4%96%E8%A7%82%E6%A8%A1%E5%BC%8F.png" class title="外观模式">
+
+<h2 id="13、模板方法模式"><a href="#13、模板方法模式" class="headerlink" title="13、模板方法模式"></a>13、模板方法模式</h2><p>在父类中编排主流程，将步骤实现延迟到子类去实现。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="模板方法模式">
+
+<h2 id="14、策略模式"><a href="#14、策略模式" class="headerlink" title="14、策略模式"></a>14、策略模式</h2><p>通过选择策略类，来执行不同算法分支。核心是通过注入对象，改变行为。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F.png" class title="策略模式">
+
+<h2 id="15、责任链模式"><a href="#15、责任链模式" class="headerlink" title="15、责任链模式"></a>15、责任链模式</h2><p>将请求传给一个接收者链，由链将请求流转给目标对象。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F.png" class title="责任链模式">
+
+<h2 id="16、观察者模式"><a href="#16、观察者模式" class="headerlink" title="16、观察者模式"></a>16、观察者模式</h2><p>一个对象状态改变时通知其他对象。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="观察者模式">
+
+<h2 id="17、命令模式"><a href="#17、命令模式" class="headerlink" title="17、命令模式"></a>17、命令模式</h2><p>通过增加Command抽象命令类，将不符合抽象编程的handler 调用，转为抽象编程。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%91%BD%E4%BB%A4%E6%A8%A1%E5%BC%8F.png" class title="命令模式">
+
+<h2 id="18、访问者模式"><a href="#18、访问者模式" class="headerlink" title="18、访问者模式"></a>18、访问者模式</h2><p>利用双重分派机制，弥补java多态中的方法重载是静态化的不足。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%AE%BF%E9%97%AE%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="访问者模式">
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" data-id="ckgr9uaya000a30vbbdiketc4" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" data-id="ckgt36pxl000bbcvb4tz9fufq" class="article-share-link">Share</a>
       
       
     </footer>
