@@ -1,6 +1,216 @@
 <?xml version="1.0" encoding="utf-8"?>
 <search>
   <entry>
+    <title>RecyclerView回收复用机制</title>
+    <url>/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/</url>
+    <content><![CDATA[<h1 id="一、复用"><a href="#一、复用" class="headerlink" title="一、复用"></a>一、复用</h1><h2 id="1、滑动时的复用入口"><a href="#1、滑动时的复用入口" class="headerlink" title="1、滑动时的复用入口"></a>1、滑动时的复用入口</h2><h3 id="1-1-获取缓存并复用的流程"><a href="#1-1-获取缓存并复用的流程" class="headerlink" title="1.1 获取缓存并复用的流程"></a>1.1 获取缓存并复用的流程</h3><ul>
+<li><p>onTouchEvent </p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">    <span class="keyword">if</span> (scrollByInternal(</span><br><span class="line">                            canScrollHorizontally ? dx : <span class="number">0</span>,</span><br><span class="line">                            canScrollVertically ? dy : <span class="number">0</span>,</span><br><span class="line">                            vtev)) &#123;</span><br><span class="line">                        getParent().requestDisallowInterceptTouchEvent(<span class="keyword">true</span>);</span><br><span class="line">                    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>scrollByInternal</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (x != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedX = mLayout.scrollHorizontallyBy(x, mRecycler, mState);</span><br><span class="line">              unconsumedX = x - consumedX;</span><br><span class="line">          &#125;</span><br><span class="line">          <span class="keyword">if</span> (y != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedY = mLayout.scrollVerticallyBy(y, mRecycler, mState);</span><br><span class="line">              unconsumedY = y - consumedY;</span><br><span class="line">          &#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>scrollVerticallyBy</p>
+<p>直接看LinearLayoutManager里面重写的方法。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mOrientation == HORIZONTAL) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> scrollBy(dy, recycler, state);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>scrollBy</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">int</span> consumed = mLayoutState.mScrollingOffset</span><br><span class="line">                + fill(recycler, mLayoutState, state, <span class="keyword">false</span>);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>fill</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">layoutChunk(recycler, state, layoutState, layoutChunkResult);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>layoutChunk</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">View view = layoutState.next(recycler);</span><br><span class="line">addView(view);</span><br></pre></td></tr></table></figure>
+
+<p>在这里获取到缓存的view并addView添加，完成复用。</p>
+</li>
+</ul>
+<h3 id="1-2-RecyclerView缓存机制"><a href="#1-2-RecyclerView缓存机制" class="headerlink" title="1.2 RecyclerView缓存机制"></a>1.2 RecyclerView缓存机制</h3><p>采用四级缓存：（目的是为了提高性能，具体体现在mCacheViews和RecyclerViewPool）</p>
+<ul>
+<li>mChangeScrap与 mAttachedScrap (用来缓存还在屏幕内的 ViewHolder )</li>
+<li>mCachedViews (用来缓存移除屏幕之外的 ViewHolder )</li>
+<li>mViewCacheExtension (开发给用户的自定义扩展缓存，需要用户自己管理 View 的创建和缓存 )</li>
+<li>RecycledViewPool (ViewHolder 缓存池)</li>
+</ul>
+<h3 id="1-3-复用如何调用缓存"><a href="#1-3-复用如何调用缓存" class="headerlink" title="1.3 复用如何调用缓存"></a>1.3 复用如何调用缓存</h3><ul>
+<li><p>进入next方法看看</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">next</span><span class="params">(RecyclerView.Recycler recycler)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (mScrapList != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> nextViewFromScrapList();</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">final</span> View view = recycler.getViewForPosition(mCurrentPosition);</span><br><span class="line">            mCurrentPosition += mItemDirection;</span><br><span class="line">            <span class="keyword">return</span> view;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>getViewForPosition</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">getViewForPosition</span><span class="params">(<span class="keyword">int</span> position, <span class="keyword">boolean</span> dryRun)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> tryGetViewHolderForPositionByDeadline(position, dryRun, FOREVER_NS).itemView;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>tryGetViewHolderForPositionByDeadline</p>
+<p>分几种情况去获取ViewHolder</p>
+<ul>
+<li>getChangedScrapViewForPosition – mChangeScrap 与动画相关</li>
+<li>getScrapOrHiddenOrCachedHolderForPosition  – mAttachedScrap 、mCachedViews </li>
+<li>getScrapOrCachedViewForId  – mAttachedScrap 、mCachedViews </li>
+<li>mViewCacheExtension.getViewForPositionAndType – 自定义缓存 </li>
+<li>getRecycledViewPool().getRecycledView – 从缓冲池里面获取</li>
+</ul>
+<p>总体流程：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">ViewHolder <span class="title">tryGetViewHolderForPositionByDeadline</span><span class="params">(<span class="keyword">int</span> position,</span></span></span><br><span class="line"><span class="function"><span class="params">               <span class="keyword">boolean</span> dryRun, <span class="keyword">long</span> deadlineNs)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//先从mChangedScrap中获取</span></span><br><span class="line">    holder = getChangedScrapViewForPosition(position);</span><br><span class="line">    <span class="comment">//如果没有获取到，再从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">               holder = getScrapOrHiddenOrCachedHolderForPosition(position, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果没有获取到，这里还有一个方法也是从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span>(holder == <span class="keyword">null</span>)&#123;</span><br><span class="line">        holder = getScrapOrCachedViewForId(mAdapter.getItemId(offsetPosition),</span><br><span class="line">                       type, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，而且自定义了缓存，就从自定义缓存中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span> &amp;&amp; mViewCacheExtension != <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="keyword">final</span> View view = mViewCacheExtension</span><br><span class="line">                           .getViewForPositionAndType(<span class="keyword">this</span>, position, type);</span><br><span class="line">         <span class="keyword">if</span> (view != <span class="keyword">null</span>) &#123;</span><br><span class="line">         	holder = getChildViewHolder(view);</span><br><span class="line">         &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，就从缓冲池里获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">        holder = getRecycledViewPool().getRecycledView(type);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果最后都未获取到缓存，就调用方法createViewHolder</span></span><br><span class="line">     <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">         holder = mAdapter.createViewHolder(RecyclerView.<span class="keyword">this</span>, type);</span><br><span class="line">     &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//holder创建后，绑定布局</span></span><br><span class="line">    bound = tryBindViewHolderByDeadline(holder, offsetPosition, position, deadlineNs);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>进入createViewHolder后，通过子类自定义实现的adapter，重写onCreateViewHolder，来创建viewHolder。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> VH <span class="title">createViewHolder</span><span class="params">(ViewGroup parent, <span class="keyword">int</span> viewType)</span> </span>&#123;</span><br><span class="line">           Trace.beginSection(TRACE_CREATE_VIEW_TAG);</span><br><span class="line">           <span class="keyword">final</span> VH holder = onCreateViewHolder(parent, viewType);</span><br><span class="line">           holder.mItemViewType = viewType;</span><br><span class="line">           Trace.endSection();</span><br><span class="line">           <span class="keyword">return</span> holder;</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
+
+<p>绑定布局流程，进入onBindViewHolder</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">mAdapter.bindViewHolder(holder, offsetPosition);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">bindViewHolder</span><span class="params">(VH holder, <span class="keyword">int</span> position)</span> </span>&#123;</span><br><span class="line">           onBindViewHolder(holder, position, holder.getUnmodifiedPayloads());</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<h2 id="2、布局时的复用入口"><a href="#2、布局时的复用入口" class="headerlink" title="2、布局时的复用入口"></a>2、布局时的复用入口</h2><ul>
+<li>RecyclerView.OnLayout</li>
+<li>dispatchLayout()</li>
+<li>dispatchLayoutStep2()</li>
+<li>mLayout.onLayoutChildren(mRecycler, mState)</li>
+<li>fill(recycler, mLayoutState, state, false)</li>
+</ul>
+<p>接下来就和之前的步骤相同了。</p>
+<h1 id="二、回收（缓存）"><a href="#二、回收（缓存）" class="headerlink" title="二、回收（缓存）"></a>二、回收（缓存）</h1><h2 id="1、LinearLayoutManager-onLayoutChildren中缓存"><a href="#1、LinearLayoutManager-onLayoutChildren中缓存" class="headerlink" title="1、LinearLayoutManager.onLayoutChildren中缓存"></a>1、LinearLayoutManager.onLayoutChildren中缓存</h2><p>进入ViewHolder中：</p>
+<ul>
+<li>detachAndScrapAttachedViews(recycler)</li>
+<li>scrapOrRecycleView(recycler, i, v)</li>
+<li>recycler.recycleViewHolderInternal(viewHolder) 以及recycler.scrapView(view)两种方式</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">scrapOrRecycleView</span><span class="params">(Recycler recycler, <span class="keyword">int</span> index, View view)</span> </span>&#123;</span><br><span class="line">           <span class="keyword">if</span> (viewHolder.isInvalid() &amp;&amp; !viewHolder.isRemoved()</span><br><span class="line">                   &amp;&amp; !mRecyclerView.mAdapter.hasStableIds()) &#123;</span><br><span class="line">               recycler.recycleViewHolderInternal(viewHolder);</span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               recycler.scrapView(view);</span><br><span class="line">           &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="1-1-recycler-scrapView"><a href="#1-1-recycler-scrapView" class="headerlink" title="1.1 recycler.scrapView"></a>1.1 recycler.scrapView</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">scrapView</span><span class="params">(View view)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span>（。。。）&#123;</span><br><span class="line">        mAttachedScrap.add(holder);</span><br><span class="line">    &#125;<span class="keyword">else</span>&#123;</span><br><span class="line">        mChangedScrap.add(holder);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在这里只对mAttachedScrap、mChangedScrap进行缓存，直接添加进集合。</p>
+<h3 id="1-2-recycler-recycleViewHolderInternal"><a href="#1-2-recycler-recycleViewHolderInternal" class="headerlink" title="1.2 recycler.recycleViewHolderInternal"></a>1.2 recycler.recycleViewHolderInternal</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">boolean</span> cached = <span class="keyword">false</span>;</span><br><span class="line"><span class="keyword">if</span> (forceRecycle || holder.isRecyclable()) &#123;</span><br><span class="line">    <span class="comment">//这里如果viewHolder发生改变，就不会进入if语句</span></span><br><span class="line">    <span class="keyword">if</span> (mViewCacheMax &gt; <span class="number">0</span> &amp;&amp; !holder.hasAnyOfTheFlags(ViewHolder.FLAG_INVALID</span><br><span class="line">                                | ViewHolder.FLAG_REMOVED</span><br><span class="line">                                | ViewHolder.FLAG_UPDATE</span><br><span class="line">                                | ViewHolder.FLAG_ADAPTER_POSITION_UNKNOWN)) &#123;</span><br><span class="line">        <span class="keyword">int</span> cachedViewSize = mCachedViews.size();</span><br><span class="line">    	<span class="keyword">if</span> (cachedViewSize &gt;= mViewCacheMax &amp;&amp; cachedViewSize &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        	<span class="comment">//mViewCacheMax的值为2</span></span><br><span class="line">        	<span class="comment">//如果mCachedViews大小大于2，就把第一位的viewHolder从mCachedViews里移除，放入缓存池中</span></span><br><span class="line">    		recycleCachedViewAt(<span class="number">0</span>);<span class="comment">//--&gt; 进入方法会调用addViewHolderToRecycledViewPool(viewHolder, true)</span></span><br><span class="line">    		cachedViewSize--;</span><br><span class="line">    	&#125;</span><br><span class="line">        <span class="comment">//往mCachedViews里添加新的viewHolder缓存</span></span><br><span class="line">    	mCachedViews.add(targetCacheIndex, holder);</span><br><span class="line">    	cached = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">	<span class="comment">//相当于如果viewHolder改变，就会把viewHolder直接添加到缓存池中</span></span><br><span class="line">    <span class="keyword">if</span> (!cached) &#123;</span><br><span class="line">    	addViewHolderToRecycledViewPool(holder, <span class="keyword">true</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;<span class="keyword">else</span>&#123;</span><br><span class="line">	 mViewInfoStore.removeViewHolder(holder);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个过程可以用下图表示：</p>
+<img src="/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/%E7%BC%93%E5%AD%98.png" class title="缓存">
+
+
+
+<p>缓存池中一个类型的viewHolder最大可以存放五个。</p>
+<p>如果不需要缓存或者缓存池该类型的数组已满，那么就直接把这个viewHolder丢弃，因为缓存池中存放的是viewHolder的类型，不存入也不影响。</p>
+<p>最后在addViewHolderToRecycledViewPool方法中将viewHolder放入缓存池后，把该viewHolder清空。</p>
+<p>addViewHolderToRecycledViewPool - &gt; getRecycledViewPool().putRecycledView(holder) -&gt;  scrap.resetInternal()</p>
+<p>在这个方法中把viewHolder的标记重置，完成清空。</p>
+<p>由此可以看出，在这个方法中，对mCachedViews、RecyclerViewPool进行处理。</p>
+<h2 id="2、LinearLayoutManager-onLayoutChildren的fill中缓存"><a href="#2、LinearLayoutManager-onLayoutChildren的fill中缓存" class="headerlink" title="2、LinearLayoutManager.onLayoutChildren的fill中缓存"></a>2、LinearLayoutManager.onLayoutChildren的fill中缓存</h2><p>会从fill方法中调用 recycler.recycleViewHolderInterna方法，所以在fill这里只会处理mCachedViews和缓存池的缓存。</p>
+<h1 id="三、自定义layoutManager"><a href="#三、自定义layoutManager" class="headerlink" title="三、自定义layoutManager"></a>三、自定义layoutManager</h1><p>调用detachAndScrapAttachedViews(recycler)进行回收复用</p>
+<p>调用recycler.getViewForPosition(i)进行缓存</p>
+]]></content>
+  </entry>
+  <entry>
+    <title>handler</title>
+    <url>/2020/10/19/handler/</url>
+    <content><![CDATA[<h1 id="Handler工作流程"><a href="#Handler工作流程" class="headerlink" title="Handler工作流程"></a>Handler工作流程</h1><img src="/2020/10/19/handler/handler%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6.png" class title="handler工作机制">
+
+<p>​    就像这张图一样，handler只是负责发送消息、取出消息，把消息放在传送带上，传送带就是MessageQueue，相当于一个容器（一个用单链表实现的优先级队列，根据事件处理时间来进行优先级判断），而传送带的动力就是Looper，在安卓程序启动的时候会在jvm里找到main方法入口（ActivityThread中），在main方法里进行主线程Looper的prepare和loop，在loop中无限循环，不停的调用queue.next()，取出队头的消息，当messageQueue内存不够了，继续入队时就会系统卡死，系统的消息也无法入队响应，而当messageQueue为空时，就会阻塞当前线程，等待下一个消息入队，再唤醒。</p>
+<h1 id="细节"><a href="#细节" class="headerlink" title="细节"></a>细节</h1><p>从handler的使用入手，我们使用的时候，是创建一个handler，重写handleMessage方法，然后在主线程sendMessage。</p>
+<p>所以开始和结尾就分别为sendMessage和handleMessage，我们从这里入手去看源码。</p>
+<ul>
+<li><p>handler.sendMessage() —&gt;handler.sendMessageAtTime() —&gt;enqueueMessage</p>
+<p>所有的send、post方法最终都会调用进入sendMessageAtTime方法，然后进行消息的入队操作enqueueMessage，所以这就能印证handler的作用就是把消息放在传送带上，也就是把消息入队。</p>
+<img src="/2020/10/19/handler/handleMessage.png" class title="handleMessage">
+</li>
+<li><p>queue.enqueueMessage()</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	prev = p;</span><br><span class="line">    p = p.next;</span><br><span class="line">    <span class="keyword">if</span> (p == <span class="keyword">null</span> || when &lt; p.when) &#123;</span><br><span class="line">    	<span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (needWake &amp;&amp; p.isAsynchronous()) &#123;</span><br><span class="line">        needWake = <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">msg.next = p; <span class="comment">// invariant: p == prev.next</span></span><br><span class="line">prev.next = msg;</span><br></pre></td></tr></table></figure>
+
+<p>​    这里是入队的一系列操作，可以看出这个队列是由一个单链表实现的，而且会根据事件处理事件进行<strong>插入排序</strong>，所以这个队列是一个优先级队列。</p>
+</li>
+<li><p>Looper.loop() ，Looper.prepareMainLooper()</p>
+<p>入队结束后，所有的事情都交给Looper来进行传动，从程序启动main方法入手。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">Looper.prepareMainLooper();</span><br><span class="line">Looper.loop();</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p>Looper.prepareMainLooper();</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepareMainLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        prepare(<span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">synchronized</span> (Looper<span class="class">.<span class="keyword">class</span>) </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (sMainLooper != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The main Looper has already been prepared."</span>);</span><br><span class="line">            &#125;</span><br><span class="line">            sMainLooper = myLooper();</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="meta">@Nullable</span> <span class="function">Looper <span class="title">myLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sThreadLocal.get();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepare</span><span class="params">(<span class="keyword">boolean</span> quitAllowed)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (sThreadLocal.get() != <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Only one Looper may be created per thread"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        sThreadLocal.set(<span class="keyword">new</span> Looper(quitAllowed));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//ThreadLocal</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">set</span><span class="params">(T value)</span> </span>&#123;</span><br><span class="line">        Thread t = Thread.currentThread();</span><br><span class="line">        ThreadLocalMap map = getMap(t);</span><br><span class="line">        <span class="keyword">if</span> (map != <span class="keyword">null</span>)</span><br><span class="line">            map.set(<span class="keyword">this</span>, value);</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            createMap(t, value);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    从这里可以看出，Looper的准备其实就是在主线程的ThreadLocal的ThreadLocalMap里添加了一个key为ThreadLocal，value为Looper的键值对。</p>
+<p>​    并且static final ThreadLocal<Looper> sThreadLocal = new ThreadLocal<Looper>();ThreadLocal是静态常量，所以只有一个。</Looper></Looper></p>
+<p>​    在set的时候如果map不为空，就会抛出异常，所以Looper也无法更改。</p>
+<p>​    ThreadLocal全系统就只有一个，而Looper可以有多个，但是ThreadLocal可以有多个ThreadLocalMap，每个Map的key都是唯一的ThreadLocal，value就是对应线程的Looper。</p>
+<p>​    因此可以解释为什么一个线程只能有一个Looper和一个ThreadLocalMap了。</p>
+</li>
+<li><p>Looper.loop();</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	Message msg = queue.next()；</span><br><span class="line">    <span class="keyword">if</span> (msg == <span class="keyword">null</span>) &#123;</span><br><span class="line">      <span class="comment">// No message indicates that the message queue is quitting.</span></span><br><span class="line">      <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  msg.target.dispatchMessage(msg);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    在loop中会进入一个无限循环，不停的取出MessageQueue的队头消息，这个循环只有在msg为空的情况下才会跳出循环，而主线程的loop方法只有在程序退出时会结束。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">dispatchMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg.callback != <span class="keyword">null</span>) &#123;</span><br><span class="line">            handleCallback(msg);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (mCallback != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">if</span> (mCallback.handleMessage(msg)) &#123;</span><br><span class="line">                    <span class="keyword">return</span>;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">          handleMessage(msg);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>然后进入dispatchMessage，调入到handleMessage，流程结束。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h1 id="注意点"><a href="#注意点" class="headerlink" title="注意点"></a>注意点</h1><h2 id="消息沉睡唤醒机制"><a href="#消息沉睡唤醒机制" class="headerlink" title="消息沉睡唤醒机制"></a>消息沉睡唤醒机制</h2><p>​    在消息入队和消息出队时，都会有特殊情况的出现，比如队列为空，队列为满，虽然并没有处理队列为满的情况，但是在消息把内存占满的情况下。系统消息无法入队，就会造成手机卡死，所以handler不能用来做定时提醒。</p>
+<p>​    在两种情况下会造成阻塞：</p>
+<ul>
+<li>队列里没有消息时会无限阻塞，直到又有消息入队时会唤醒。</li>
+<li>队列里出队的消息需要延时执行，会阻塞到执行时间。</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">int</span> nextPollTimeoutMillis = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span>(;;)&#123;</span><br><span class="line">    <span class="comment">//沉睡</span></span><br><span class="line">    nativePollOnce(ptr, nextPollTimeoutMillis);</span><br><span class="line">    <span class="comment">//进入循环遍历和等待操作</span></span><br><span class="line">    <span class="keyword">synchronized</span>(<span class="keyword">this</span>)&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (now &lt; msg.when) &#123;</span><br><span class="line">                        <span class="comment">// Next message is not ready.  Set a timeout to wake up when it is ready.</span></span><br><span class="line">                        nextPollTimeoutMillis = (<span class="keyword">int</span>) Math.min(msg.when - now, Integer.MAX_VALUE);</span><br><span class="line">                    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                        <span class="comment">// Got a message.</span></span><br><span class="line">                        mBlocked = <span class="keyword">false</span>;</span><br><span class="line">                        <span class="keyword">if</span> (prevMsg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                            prevMsg.next = msg.next;</span><br><span class="line">                        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                            mMessages = msg.next;</span><br><span class="line">                        &#125;</span><br><span class="line">                        msg.next = <span class="keyword">null</span>;</span><br><span class="line">                        <span class="keyword">if</span> (DEBUG) Log.v(TAG, <span class="string">"Returning message: "</span> + msg);</span><br><span class="line">                        msg.markInUse();</span><br><span class="line">                        <span class="keyword">return</span> msg;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">// No more messages.</span></span><br><span class="line">                    nextPollTimeoutMillis = -<span class="number">1</span>;</span><br><span class="line">                &#125;</span><br><span class="line">		&#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    这段代码是在一个无限循环中进行的，nextPollTimeoutMillis初始值为0，nativePollOnce沉睡，如果消息执行时间比现在的时间晚，就回计算出间隔时间，并且沉睡这么久，如果队列为空，就会赋值为-1，无限沉睡。</p>
+<p>​    唤醒函数是在插入新的消息时调用。</p>
+<h2 id="线程安全"><a href="#线程安全" class="headerlink" title="线程安全"></a>线程安全</h2><p>​    handler和Looper内部并没有关注线程安全，而是全部交给MessageQueue入队和出队时处理。</p>
+<p>​    在出队时，有一个内置对象锁，锁的是messageQueue对象，所以不同线程的handler发送和取出消息时，都会阻塞。</p>
+<p>​    同理，在入队时也会有一个内置对象锁，锁的是messageQueue对象。</p>
+<h2 id="子线程创建Handler"><a href="#子线程创建Handler" class="headerlink" title="子线程创建Handler"></a>子线程创建Handler</h2><p>​    如果在子线程中创建handler，需要自己执行Looper.prepare,Looper.loop函数，并且在队列为空时需要调用Looper.quit结束loop中的循环。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">quit</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	mQueue.quit(<span class="keyword">false</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//MessageQueue</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">quit</span><span class="params">(<span class="keyword">boolean</span> safe)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//在主线程中不允许quit操作</span></span><br><span class="line">	<span class="keyword">if</span> (!mQuitAllowed) &#123;</span><br><span class="line">    	<span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Main thread not allowed to quit."</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">    	<span class="keyword">if</span> (mQuitting) &#123;</span><br><span class="line">           <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//把 mQuitting设置为true</span></span><br><span class="line">        mQuitting = <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//移除消息队列中所有消息</span></span><br><span class="line">        <span class="keyword">if</span> (safe) &#123;</span><br><span class="line">        	removeAllFutureMessagesLocked();</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            removeAllMessagesLocked();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//唤醒next方法中的沉睡线程</span></span><br><span class="line">        <span class="comment">// We can assume mPtr != 0 because mQuitting was previously false.</span></span><br><span class="line">        nativeWake(mPtr);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    此时再进入next中的for循环，在<strong>if (mQuitting) {dispose();return null;}</strong>处返回null，再回到Looper.loop中，<strong>if (msg == null)  return;</strong>结束for循环，当前线程的Looper就停止运作。</p>
+<h2 id="内存泄露"><a href="#内存泄露" class="headerlink" title="内存泄露"></a>内存泄露</h2><ul>
+<li><p>为什么使用Handler会造成内存泄露？</p>
+<p>​    因为内部类调用外部类的方法或者变量，导致内部类持有外部类引用，匿名内部类持有Activity.this，而Message持有Handler，MessageQueue又持有Message，MessageQueue又是在Looper构造函数时创建的，每一个线程就只有一个MessageQueue，而Looper在线程还存活时就一直存在，所以当Activity需要被回收时，根据JVM可达性分析，GC下activity无法被回收，导致内存溢出。</p>
+<p><strong>Looper -&gt; MessageQueue -&gt; Message  -&gt; Handler -&gt;Activity.this</strong></p>
+</li>
+<li><p>为什么其他地方的内部类并不会有这种情况？</p>
+<p>因为handler和Activity生命周期不同，而其它地方生命周期相同，可以同时回收。</p>
+</li>
+</ul>
+<h2 id="Message怎么创建"><a href="#Message怎么创建" class="headerlink" title="Message怎么创建"></a>Message怎么创建</h2><ul>
+<li><p>一般是利用message.obtain方法创建</p>
+</li>
+<li><p>如果频繁的new Message()，会导致内存抖动，gc频繁造成卡顿，有可能OOM</p>
+</li>
+<li><p>如何处理？</p>
+<p>​    在loop中，msg.dispatchMessage被调用之后，会调用msg.recycleUnchecked()，把这个消息插入一个单链表的头部，在调用obtain时，将新的消息赋值给头部结点，将其取出。</p>
+<p>​    这样的好处就是把内存空间一直保留着，不会产生内存碎片，及内存抖动。</p>
+</li>
+</ul>
+<h2 id="loop的死循环阻塞为什么不会导致ANR"><a href="#loop的死循环阻塞为什么不会导致ANR" class="headerlink" title="loop的死循环阻塞为什么不会导致ANR"></a>loop的死循环阻塞为什么不会导致ANR</h2><ul>
+<li>ANR是当事件一段时间无响应时，通过handler新建一个ANR事件，去进行提醒</li>
+<li>ANR发生是因为事件一段时间无响应造成的</li>
+<li>而ANR本身也是一个事件</li>
+<li>而loop里的阻塞是因为没有事情干了，把CPU释放出来沉睡休息，完全没有关联</li>
+</ul>
+<h1 id="同步屏障"><a href="#同步屏障" class="headerlink" title="同步屏障"></a>同步屏障</h1><img src="/2020/10/19/handler/%E5%90%8C%E6%AD%A5%E5%B1%8F%E9%9A%9C.png" class title="同步屏障">
+
+<p>​    如果有需要立刻执行的消息，就可以先调用message.postSyncBarrier()方法发送同步屏障，插入到对头，这条消息的target为null。</p>
+<p>​    然后再把需要立刻执行的消息setAsynchronous(true)设置为异步消息，再send，然后在next方法中：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (msg != <span class="keyword">null</span> &amp;&amp; msg.target == <span class="keyword">null</span>) &#123;</span><br><span class="line">	<span class="comment">// Stalled by a barrier.  Find the next asynchronous message in the queue.</span></span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">    	prevMsg = msg;</span><br><span class="line">        msg = msg.next;</span><br><span class="line">    &#125; <span class="keyword">while</span> (msg != <span class="keyword">null</span> &amp;&amp; !msg.isAsynchronous());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    如果target==null，就直接找到最近的异步消息，立刻执行。</p>
+<p>​    这个机制在ui更新上应用很多，ui每16ms就会刷新一次，就是发送同步屏障和异步消息来实现。</p>
+<h1 id="HandlerThread"><a href="#HandlerThread" class="headerlink" title="HandlerThread"></a>HandlerThread</h1><p>用于方便的把Handler在子线程中使用，其继承于Thread，并且保证了线程安全。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        mTid = Process.myTid();</span><br><span class="line">        Looper.prepare();</span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            mLooper = Looper.myLooper();</span><br><span class="line">            notifyAll();</span><br><span class="line">        &#125;</span><br><span class="line">        Process.setThreadPriority(mPriority);</span><br><span class="line">        onLooperPrepared();</span><br><span class="line">        Looper.loop();</span><br><span class="line">        mTid = -<span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> Looper <span class="title">getLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (!isAlive()) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// If the thread has been started, wait until the looper has been created.</span></span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive() &amp;&amp; mLooper == <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    wait();</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> mLooper;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<p>通过对象锁和wait、notifyAll保证线程安全。</p>
+<p><strong>使用：</strong></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">HandlerThread handlerThread = <span class="keyword">new</span> HandlerThread(<span class="string">"xxxxxx"</span>);</span><br><span class="line">handlerThread.start();</span><br><span class="line">mHandler = <span class="keyword">new</span> Handler(handlerThread.getLooper());</span><br><span class="line">mHandler.sendMessage();</span><br></pre></td></tr></table></figure>
+
+<h1 id="IntentService"><a href="#IntentService" class="headerlink" title="IntentService"></a>IntentService</h1><p>用于后台服务处理一些异步消息。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onCreate</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>.onCreate();</span><br><span class="line">        HandlerThread thread = <span class="keyword">new</span> HandlerThread(<span class="string">"IntentService["</span> + mName + <span class="string">"]"</span>);</span><br><span class="line">        thread.start();</span><br><span class="line"></span><br><span class="line">        mServiceLooper = thread.getLooper();</span><br><span class="line">        mServiceHandler = <span class="keyword">new</span> ServiceHandler(mServiceLooper);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onStart</span><span class="params">(@Nullable Intent intent, <span class="keyword">int</span> startId)</span> </span>&#123;</span><br><span class="line">        Message msg = mServiceHandler.obtainMessage();</span><br><span class="line">        msg.arg1 = startId;</span><br><span class="line">        msg.obj = intent;</span><br><span class="line">        mServiceHandler.sendMessage(msg);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">ServiceHandler</span> <span class="keyword">extends</span> <span class="title">Handler</span> </span>&#123;</span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="title">ServiceHandler</span><span class="params">(Looper looper)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">super</span>(looper);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">handleMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">            onHandleIntent((Intent)msg.obj);</span><br><span class="line">            stopSelf(msg.arg1);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>重写时重写onHandleIntent方法，进行异步任务，</p>
+<p>在OnCreate时利用HandlerThread获取handler，然后在onStart时发送消息，在处理消息时调用onHandleIntent，并且停止服务。</p>
+]]></content>
+  </entry>
+  <entry>
     <title>binder</title>
     <url>/2020/10/22/binder/</url>
     <content><![CDATA[<h1 id="Binder是什么？"><a href="#Binder是什么？" class="headerlink" title="Binder是什么？"></a>Binder是什么？</h1><ul>
@@ -292,6 +502,267 @@
 </li>
 <li><p>data、reply</p>
 <p>​    传递数据时，会有data、reply两种，data是把需要传出去的数据封装，reply是用于接收传回来的数据。</p>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
+    <title>事件分发二级联动</title>
+    <url>/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/</url>
+    <content><![CDATA[<h2 id="1-事件分发流程"><a href="#1-事件分发流程" class="headerlink" title="1 事件分发流程"></a>1 事件分发流程</h2><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%872.png" class title="分发流程">
+
+<ul>
+<li><p>从控件回调回activity开始分发，调用dispatchTouchEvent</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">dispatchTouchEvent</span><span class="params">(MotionEvent ev)</span> </span>&#123;</span><br><span class="line">      <span class="keyword">if</span> (ev.getAction() == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">          onUserInteraction();</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">if</span> (getWindow().superDispatchTouchEvent(ev)) &#123;</span><br><span class="line">          <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">return</span> onTouchEvent(ev);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>进入PhoneWindow中</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">superDispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">return</span> mDecor.superDispatchTouchEvent(event);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>进入DecorView中</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">superDispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">return</span> <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>此时调用父类的dispatchTouchEvent方法，而DecorView的父类是FragmentLayout，并没有重写dispatchTouchEvent方法，所以交给它的父类ViewGroup来调用。</p>
+</li>
+<li><p>从而进一步就进入了View和ViewGroup的树形结构</p>
+<img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%871.png" class title="树形结构">
+
+</li>
+</ul>
+<h3 id="1-1-事件处理（View）"><a href="#1-1-事件处理（View）" class="headerlink" title="1.1 事件处理（View）"></a>1.1 事件处理（View）</h3><ul>
+<li><p>view的dispatchTouchEvent方法</p>
+</li>
+<li><p>关键代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">   <span class="keyword">if</span> (onFilterTouchEventForSecurity(event)) &#123;</span><br><span class="line">         <span class="keyword">if</span> ((mViewFlags &amp; ENABLED_MASK) == ENABLED &amp;&amp; handleScrollBarDragging(event)) &#123;</span><br><span class="line">             result = <span class="keyword">true</span>;</span><br><span class="line">         &#125;</span><br><span class="line">         <span class="comment">/**这一段最关键</span></span><br><span class="line"><span class="comment">         ListenerInfo li = mListenerInfo;</span></span><br><span class="line"><span class="comment">         if (li != null &amp;&amp; li.mOnTouchListener != null</span></span><br><span class="line"><span class="comment">                 &amp;&amp; (mViewFlags &amp; ENABLED_MASK) == ENABLED</span></span><br><span class="line"><span class="comment">                 &amp;&amp; li.mOnTouchListener.onTouch(this, event)) &#123;</span></span><br><span class="line"><span class="comment">             result = true;</span></span><br><span class="line"><span class="comment">         &#125;</span></span><br><span class="line"><span class="comment">**/</span></span><br><span class="line">         <span class="keyword">if</span> (!result &amp;&amp; onTouchEvent(event)) &#123;</span><br><span class="line">             result = <span class="keyword">true</span>;</span><br><span class="line">         &#125;</span><br><span class="line">     &#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    其中mListenerInfo是只要调用了setOnTouchLisener就会初始化的。</p>
+<p>​    判断中的前三个条件都为true，进行到第四个条件的判断，只要OnTouch方法返回的是true，那么result就为true，否则为false。</p>
+<p>​    而result为true时，在下一个if语句中，就无法调用到onTouchEvent，无法在其中调用onClick方法，所以这就是为什么onTouch返回值为true时，onClick事件被拦截。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">performClickInternal() -&gt; performClick() -&gt; li.mOnClickListener.onClick(<span class="keyword">this</span>);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>当然满足这一切的条件时clickable要为true</p>
+</li>
+</ul>
+<h3 id="1-2-事件分发（ViewGroup）"><a href="#1-2-事件分发（ViewGroup）" class="headerlink" title="1.2 事件分发（ViewGroup）"></a>1.2 事件分发（ViewGroup）</h3><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%873.png" class title="事件分发例子">
+
+<h3 id="1-2-1-ACTION-DOWN"><a href="#1-2-1-ACTION-DOWN" class="headerlink" title="1.2.1 ACTION_DOWN"></a>1.2.1 ACTION_DOWN</h3><p>首先会清除所有标记</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">             <span class="comment">// Throw away all previous state when starting a new touch gesture.</span></span><br><span class="line">             <span class="comment">// The framework may have dropped the up or cancel event for the previous gesture</span></span><br><span class="line">             <span class="comment">// due to an app switch, ANR, or some other state change.</span></span><br><span class="line">             cancelAndClearTouchTargets(ev);</span><br><span class="line">             resetTouchState();</span><br><span class="line">         &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h4 id="1-2-1-1-拦截"><a href="#1-2-1-1-拦截" class="headerlink" title="1.2.1.1 拦截"></a>1.2.1.1 拦截</h4><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// Check for interception.</span></span><br><span class="line"><span class="keyword">final</span> <span class="keyword">boolean</span> intercepted;</span><br><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br><span class="line">        || mFirstTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">boolean</span> disallowIntercept = (mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">if</span> (!disallowIntercept) &#123;</span><br><span class="line">        intercepted = onInterceptTouchEvent(ev);</span><br><span class="line">        ev.setAction(action); <span class="comment">// restore action in case it was changed</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        intercepted = <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// There are no touch targets and this action is not an initial down</span></span><br><span class="line">    <span class="comment">// so this view group continues to intercept touches.</span></span><br><span class="line">    intercepted = <span class="keyword">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    可以看到intercepted被赋值为onInterceptTouchEvent(ev)的返回值。</p>
+<p>​    如果被拦截，则intercepted为true</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canceled &amp;&amp; !intercepted)</span><br></pre></td></tr></table></figure>
+
+<p>​    无法进入这个if语句，去进行与分发相关的操作。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mFirstTouchTarget == <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="comment">// No touch targets so treat this as an ordinary view.</span></span><br><span class="line">    handled = dispatchTransformedTouchEvent(ev, canceled, <span class="keyword">null</span>,</span><br><span class="line">            TouchTarget.ALL_POINTER_IDS);</span><br></pre></td></tr></table></figure>
+
+<p>​    在这一个if语句里进行事件的分发或者处理，进入dispatchTransformedTouchEvent方法。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (child == <span class="keyword">null</span>) &#123;</span><br><span class="line">    handled = <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    handled = child.dispatchTouchEvent(event);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    在dispatchTransformedTouchEvent里可以看到，因为调用时child此参数传入为null，所以直接调用父类View的dispatchTouchEvent方法，去处理这个事件，即这个事件被拦截在这个ViewGroup。</p>
+<h4 id="1-2-1-2-不拦截"><a href="#1-2-1-2-不拦截" class="headerlink" title="1.2.1.2 不拦截"></a>1.2.1.2 不拦截</h4><p>​    如果不拦截，则intercepted为false。</p>
+<p>​    进入第二个if语句。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br></pre></td></tr></table></figure>
+
+<p>如果为ACTION_DOWN就进入这个if语句</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (newTouchTarget == <span class="keyword">null</span> &amp;&amp; childrenCount != <span class="number">0</span>)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> ArrayList&lt;View&gt; preorderedList = buildTouchDispatchChildList()</span><br></pre></td></tr></table></figure>
+
+<p>​    进入这个if语句，并且通过buildTouchDispatchChildList()方法构造一个数组用于存放ViewGroup中的View，并且写在上面的view会放在数组后面，拿也是从数组后面开始拿。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="keyword">int</span> i = childrenCount - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--)</span><br></pre></td></tr></table></figure>
+
+<p>​    进入for循环，遍历当前ViewGroup的所有子View。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canViewReceivePointerEvents(child)</span><br><span class="line">        || !isTransformedTouchPointInView(x, y, child, <span class="keyword">null</span>)) &#123;</span><br><span class="line">    ev.setTargetAccessibilityFocus(<span class="keyword">false</span>);</span><br><span class="line">    <span class="keyword">continue</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>两个条件：</p>
+<ul>
+<li><pre><code class="java"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">canViewReceivePointerEvents</span><span class="params">(@NonNull View child)</span> </span>{
+    <span class="keyword">return</span> (child.mViewFlags &amp; VISIBILITY_MASK) == VISIBLE
+            || child.getAnimation() != <span class="keyword">null</span>;
+}
+&lt;!--￼<span class="number">15</span>--&gt;
+
+这个表示点击区域是否是View所在的区域。
+</code></pre>
+</li>
+</ul>
+<p>如果满足其中任意一个，就continue，直接遍历到下一个child。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (newTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="comment">// Child is already receiving touch within its bounds.</span></span><br><span class="line">    <span class="comment">// Give it the new pointer in addition to the ones it is handling.</span></span><br><span class="line">    newTouchTarget.pointerIdBits |= idBitsToAssign;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果newTouchTarget不为null，就直接结束循环。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, <span class="keyword">false</span>, child, idBitsToAssign)) &#123;</span><br><span class="line">    <span class="comment">// Child wants to receive touch within its bounds.</span></span><br><span class="line">    mLastTouchDownTime = ev.getDownTime();</span><br><span class="line">    <span class="keyword">if</span> (preorderedList != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="comment">// childIndex points into presorted list, find original index</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; childrenCount; j++) &#123;</span><br><span class="line">            <span class="keyword">if</span> (children[childIndex] == mChildren[j]) &#123;</span><br><span class="line">                mLastTouchDownIndex = j;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mLastTouchDownIndex = childIndex;</span><br><span class="line">    &#125;</span><br><span class="line">    mLastTouchDownX = ev.getX();</span><br><span class="line">    mLastTouchDownY = ev.getY();</span><br><span class="line">    <span class="comment">//参数赋值</span></span><br><span class="line">    newTouchTarget = addTouchTarget(child, idBitsToAssign);</span><br><span class="line">    alreadyDispatchedToNewTouchTarget = <span class="keyword">true</span>;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    在这里可以看到，如果dispatchTransformedTouchEvent(ev, false, child, idBitsToAssign)返回true，则进入对一些参数进行赋值并且结束循环，如果为false，则继续进行下去开始下一次循环。</p>
+<p>​    <strong>在dispatchTransformedTouchEvent方法中，此时child不为null，所以调用child的dispatchTouchEvent方法，即肯定是ViewGroup的。</strong></p>
+<p>​    进行完参数赋值之后，newTouchTarget == mFirstTouchTarget，target.next==null，    alreadyDispatchedToNewTouchTarget = true。</p>
+<ul>
+<li><p>在这个if语句中，如果返回值一直为false，即所有子View都不处理事件，则和拦截的情况没有区别，全部交给当前ViewGroup处理。</p>
+</li>
+<li><p>如果返回值有true，则带着变化的参数进入第三个if语句</p>
+<ul>
+<li><p>将进入else</p>
+</li>
+<li><pre><code class="java"><span class="keyword">while</span> (target != <span class="keyword">null</span>) {
+    <span class="keyword">final</span> TouchTarget next = target.next;
+    <span class="keyword">if</span> (alreadyDispatchedToNewTouchTarget &amp;&amp; target == newTouchTarget) {
+        handled = <span class="keyword">true</span>;
+    } <span class="keyword">else</span> {
+        <span class="keyword">final</span> <span class="keyword">boolean</span> cancelChild = resetCancelNextUpFlag(target.child)
+                || intercepted;
+        <span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, cancelChild,
+                target.child, target.pointerIdBits)) {
+            handled = <span class="keyword">true</span>;
+        }
+        <span class="keyword">if</span> (cancelChild) {
+            <span class="keyword">if</span> (predecessor == <span class="keyword">null</span>) {
+                mFirstTouchTarget = next;
+            } <span class="keyword">else</span> {
+                predecessor.next = next;
+            }
+            target.recycle();
+            target = next;
+            <span class="keyword">continue</span>;
+        }
+    }
+    predecessor = target;
+    target = next;
+}
+&lt;!--￼<span class="number">18</span>--&gt;
+
+肯定为<span class="keyword">true</span>，所以handled为<span class="keyword">true</span>，函数最终返回<span class="keyword">true</span>，代表这个事件我不处理。
+
+
+</code></pre>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="1-2-2-ACTION-MOVE"><a href="#1-2-2-ACTION-MOVE" class="headerlink" title="1.2.2 ACTION_MOVE"></a>1.2.2 ACTION_MOVE</h3><p>​    同样是从DecorView这一层的dispatchTouchEvent方法开始。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br><span class="line">               || mFirstTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">           <span class="keyword">final</span> <span class="keyword">boolean</span> disallowIntercept = (mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>;</span><br><span class="line">           <span class="keyword">if</span> (!disallowIntercept) &#123;</span><br><span class="line">               intercepted = onInterceptTouchEvent(ev);</span><br><span class="line">               ev.setAction(action); <span class="comment">// restore action in case it was changed</span></span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               intercepted = <span class="keyword">false</span>;</span><br><span class="line">           &#125;</span><br></pre></td></tr></table></figure>
+<p>​    此时mFirstTouchTarget != null成立，所以还是一样的intercepted赋值。</p>
+<p>​    因此进入这个if语句</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canceled &amp;&amp; !intercepted)</span><br></pre></td></tr></table></figure>
+
+<p>​    第二个if语句因为是MOVE事件，所以无法进入，进入第三个if语句的else</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mFirstTouchTarget == <span class="keyword">null</span>)</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (alreadyDispatchedToNewTouchTarget &amp;&amp; target == newTouchTarget) &#123;</span><br><span class="line">                   handled = <span class="keyword">true</span>;</span><br><span class="line">               &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                   <span class="keyword">final</span> <span class="keyword">boolean</span> cancelChild = resetCancelNextUpFlag(target.child)</span><br><span class="line">                           || intercepted;</span><br><span class="line">                   <span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, cancelChild,</span><br><span class="line">                           target.child, target.pointerIdBits)) &#123;</span><br><span class="line">                       handled = <span class="keyword">true</span>;</span><br><span class="line">                   &#125;</span><br><span class="line">                   <span class="keyword">if</span> (cancelChild) &#123;</span><br><span class="line">                       <span class="keyword">if</span> (predecessor == <span class="keyword">null</span>) &#123;</span><br><span class="line">                           mFirstTouchTarget = next;</span><br><span class="line">                       &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                           predecessor.next = next;</span><br><span class="line">                       &#125;</span><br><span class="line">                       target.recycle();</span><br><span class="line">                       target = next;</span><br><span class="line">                       <span class="keyword">continue</span>;</span><br><span class="line">                   &#125;</span><br><span class="line">               &#125;</span><br></pre></td></tr></table></figure>
+<p>​    此时alreadyDispatchedToNewTouchTarget已经被重新赋值为false，所以进入else，cancelchild为false，调用</p>
+<p>dispatchTransformedTouchEvent(ev, cancelChild,target.child, target.pointerIdBits)，target.child，直接把事件交给之前已经放入数组中的View或者ViewGroup处理。</p>
+<p>​    <strong>由此可以看出，MOVE事件并不分发，因为没有进入第二个if语句中的循环部分。</strong></p>
+<h2 id="2-处理事件冲突"><a href="#2-处理事件冲突" class="headerlink" title="2 处理事件冲突"></a>2 处理事件冲突</h2><p>只能在MOVE事件时处理事件冲突！</p>
+<h3 id="2-1-内部拦截法（子View进行拦截）"><a href="#2-1-内部拦截法（子View进行拦截）" class="headerlink" title="2.1 内部拦截法（子View进行拦截）"></a>2.1 内部拦截法（子View进行拦截）</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!disallowIntercept) &#123;</span><br><span class="line">                    intercepted = onInterceptTouchEvent(ev);</span><br><span class="line">                    ev.setAction(action); <span class="comment">// restore action in case it was changed</span></span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    intercepted = <span class="keyword">false</span>;</span><br><span class="line">                &#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    在父View调用requestDisallowInterceptTouchEvent方法，改动disallowIntercept的值为true，则intercepted就肯定为false，可以进入之后的分发过程。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">    <span class="keyword">if</span> (disallowIntercept == ((mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>)) &#123;</span><br><span class="line">        <span class="comment">// We're already in this state, assume our ancestors are too</span></span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (disallowIntercept) &#123;</span><br><span class="line">        mGroupFlags |= FLAG_DISALLOW_INTERCEPT;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mGroupFlags &amp;= ~FLAG_DISALLOW_INTERCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Pass it up to our parent</span></span><br><span class="line">    <span class="keyword">if</span> (mParent != <span class="keyword">null</span>) &#123;</span><br><span class="line">        mParent.requestDisallowInterceptTouchEvent(disallowIntercept);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>​    在这里改动mGroupFlags的值，让disallowIntercept的值也发生改变。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">boolean</span> disallowIntercept = (mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
+
+<p><strong>实现：</strong></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">   <span class="comment">// 内部拦截法：子view处理事件冲突</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> mLastX, mLastY;</span><br><span class="line"><span class="comment">//</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">dispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> x = (<span class="keyword">int</span>) event.getX();</span><br><span class="line">        <span class="keyword">int</span> y = (<span class="keyword">int</span>) event.getY();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">switch</span> (event.getAction()) &#123;</span><br><span class="line">            <span class="keyword">case</span> MotionEvent.ACTION_DOWN: &#123;</span><br><span class="line">                getParent().requestDisallowInterceptTouchEvent(<span class="keyword">true</span>);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">                <span class="keyword">int</span> deltaX = x - mLastX;</span><br><span class="line">                <span class="keyword">int</span> deltaY = y - mLastY;</span><br><span class="line">                <span class="keyword">if</span> (Math.abs(deltaX) &gt; Math.abs(deltaY)) &#123;</span><br><span class="line">                    getParent().requestDisallowInterceptTouchEvent(<span class="keyword">false</span>);</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">case</span> MotionEvent.ACTION_UP: &#123;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        mLastX = x;</span><br><span class="line">        mLastY = y;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p>在DOWN事件时把disallowIntercept设置为true，让子View可以接受到事件</p>
+</li>
+<li><p>在MOVE事件时判断滑动方向，如果为左右，就交给父View处理，如果为上下，就自己处理</p>
+</li>
+<li><p>还有一个小点需要注意</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">               <span class="comment">// Throw away all previous state when starting a new touch gesture.</span></span><br><span class="line">               <span class="comment">// The framework may have dropped the up or cancel event for the previous gesture</span></span><br><span class="line">               <span class="comment">// due to an app switch, ANR, or some other state change.</span></span><br><span class="line">               cancelAndClearTouchTargets(ev);</span><br><span class="line">               resetTouchState();</span><br><span class="line">           &#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    这段代码会清除所有标记，所以在DOWN事件时，会把mGroupFlags的值也清除，因此getParent().requestDisallowInterceptTouchEvent(true)这个设置也就不起作用，我们需要在父View中再进行处理。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (event.getAction() == MotionEvent.ACTION_DOWN)&#123;</span><br><span class="line">    <span class="keyword">super</span>.onInterceptTouchEvent(event);</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> <span class="keyword">true</span>;</span><br></pre></td></tr></table></figure>
+
+<p>​    在父View中判断为DOWN事件时，就不拦截，交给子View处理。</p>
+</li>
+</ul>
+<h3 id="2-2-外部拦截法（父View进行拦截）"><a href="#2-2-外部拦截法（父View进行拦截）" class="headerlink" title="2.2 外部拦截法（父View进行拦截）"></a>2.2 外部拦截法（父View进行拦截）</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 外部拦截法：父容器处理冲突</span></span><br><span class="line"><span class="comment">// 我想要把事件分发给谁就分发给谁</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">onInterceptTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span> x = (<span class="keyword">int</span>) event.getX();</span><br><span class="line">    <span class="keyword">int</span> y = (<span class="keyword">int</span>) event.getY();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span> (event.getAction()) &#123;</span><br><span class="line">        <span class="keyword">case</span> MotionEvent.ACTION_DOWN: &#123;</span><br><span class="line">            mLastX = (<span class="keyword">int</span>) event.getX();</span><br><span class="line">            mLastY = (<span class="keyword">int</span>) event.getY();</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">            <span class="keyword">int</span> deltaX = x - mLastX;</span><br><span class="line">            <span class="keyword">int</span> deltaY = y - mLastY;</span><br><span class="line">            <span class="keyword">if</span> (Math.abs(deltaX) &gt; Math.abs(deltaY)) &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> MotionEvent.ACTION_UP: &#123;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">super</span>.onInterceptTouchEvent(event);</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>​    同样的，如果滑动方向为左右，则返回true拦截事件自己处理，反之分发。</p>
+<h3 id="2-3-MOVE过程中的变化"><a href="#2-3-MOVE过程中的变化" class="headerlink" title="2.3 MOVE过程中的变化"></a>2.3 MOVE过程中的变化</h3><p>​    在DOWN事件交给了子View处理，在第一次MOVE事件时就也是交给子View处理，如果在这个时候把滑动方向转换为了左右，那么在disptachTransformTouchEvent这个方法时就会触发CANCEL事件，并且是由子View发起的，在第二次MOVE事件时，mFirstTragetView变为了null，将被拦截，交给父View处理。</p>
+<p>​    <strong>所以，如果一个View或者ViewGroup没有拿到DOWN事件，那么他一定拿不到MOVE事件，这句话只对叶子节点是正确的。</strong></p>
+]]></content>
+  </entry>
+  <entry>
+    <title>View的创建流程</title>
+    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
+    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
+
+<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
+<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
+</li>
+<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
+</li>
+<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
+</li>
+<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
+<ul>
+<li><p>r.mPendingRemoveWindow = r.window</p>
+</li>
+<li><p>r.window = r.activity.getWindow()</p>
+</li>
+<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
+</li>
+<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
+        <span class="keyword">return</span> mWindow;
+    }
+&lt;!--￼<span class="number">0</span>--&gt;
+</code></pre>
+</li>
+</ul>
+<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
+</li>
+<li><p>此时的结构：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
+</li>
+<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
+</li>
+</ul>
+<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
+<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
+</li>
+<li><p>installDecor()，对decor进行一系列操作</p>
+<ul>
+<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
+</li>
+<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
+</li>
+<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
+<ul>
+<li>layoutResource就是传入的布局文件</li>
+<li>mLayoutInflater为布局加载器</li>
+<li>final View root = inflater.inflate(layoutResource, null)</li>
+<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
+<li>通过前两步把布局文件加载为View并且添加进去</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
+</li>
+</ul>
+</li>
+<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
+<ul>
+<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
+<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
+<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
+</ul>
+</li>
+<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
+<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
+</ul>
+</li>
+<li><p>此时状态：</p>
+<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
+</li>
+<li><p>关于inflate的attachToRoot参数的解析</p>
+<ul>
+<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
+<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
+<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
+</ul>
 </li>
 </ul>
 ]]></content>
@@ -755,710 +1226,9 @@
 ]]></content>
   </entry>
   <entry>
-    <title>handler</title>
-    <url>/2020/10/19/handler/</url>
-    <content><![CDATA[<h1 id="Handler工作流程"><a href="#Handler工作流程" class="headerlink" title="Handler工作流程"></a>Handler工作流程</h1><img src="/2020/10/19/handler/handler%E5%B7%A5%E4%BD%9C%E6%9C%BA%E5%88%B6.png" class title="handler工作机制">
-
-<p>​    就像这张图一样，handler只是负责发送消息、取出消息，把消息放在传送带上，传送带就是MessageQueue，相当于一个容器（一个用单链表实现的优先级队列，根据事件处理时间来进行优先级判断），而传送带的动力就是Looper，在安卓程序启动的时候会在jvm里找到main方法入口（ActivityThread中），在main方法里进行主线程Looper的prepare和loop，在loop中无限循环，不停的调用queue.next()，取出队头的消息，当messageQueue内存不够了，继续入队时就会系统卡死，系统的消息也无法入队响应，而当messageQueue为空时，就会阻塞当前线程，等待下一个消息入队，再唤醒。</p>
-<h1 id="细节"><a href="#细节" class="headerlink" title="细节"></a>细节</h1><p>从handler的使用入手，我们使用的时候，是创建一个handler，重写handleMessage方法，然后在主线程sendMessage。</p>
-<p>所以开始和结尾就分别为sendMessage和handleMessage，我们从这里入手去看源码。</p>
-<ul>
-<li><p>handler.sendMessage() —&gt;handler.sendMessageAtTime() —&gt;enqueueMessage</p>
-<p>所有的send、post方法最终都会调用进入sendMessageAtTime方法，然后进行消息的入队操作enqueueMessage，所以这就能印证handler的作用就是把消息放在传送带上，也就是把消息入队。</p>
-<img src="/2020/10/19/handler/handleMessage.png" class title="handleMessage">
-</li>
-<li><p>queue.enqueueMessage()</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	prev = p;</span><br><span class="line">    p = p.next;</span><br><span class="line">    <span class="keyword">if</span> (p == <span class="keyword">null</span> || when &lt; p.when) &#123;</span><br><span class="line">    	<span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (needWake &amp;&amp; p.isAsynchronous()) &#123;</span><br><span class="line">        needWake = <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">msg.next = p; <span class="comment">// invariant: p == prev.next</span></span><br><span class="line">prev.next = msg;</span><br></pre></td></tr></table></figure>
-
-<p>​    这里是入队的一系列操作，可以看出这个队列是由一个单链表实现的，而且会根据事件处理事件进行<strong>插入排序</strong>，所以这个队列是一个优先级队列。</p>
-</li>
-<li><p>Looper.loop() ，Looper.prepareMainLooper()</p>
-<p>入队结束后，所有的事情都交给Looper来进行传动，从程序启动main方法入手。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">Looper.prepareMainLooper();</span><br><span class="line">Looper.loop();</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><p>Looper.prepareMainLooper();</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepareMainLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        prepare(<span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">synchronized</span> (Looper<span class="class">.<span class="keyword">class</span>) </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (sMainLooper != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"The main Looper has already been prepared."</span>);</span><br><span class="line">            &#125;</span><br><span class="line">            sMainLooper = myLooper();</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="meta">@Nullable</span> <span class="function">Looper <span class="title">myLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> sThreadLocal.get();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">prepare</span><span class="params">(<span class="keyword">boolean</span> quitAllowed)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (sThreadLocal.get() != <span class="keyword">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> RuntimeException(<span class="string">"Only one Looper may be created per thread"</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        sThreadLocal.set(<span class="keyword">new</span> Looper(quitAllowed));</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//ThreadLocal</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">set</span><span class="params">(T value)</span> </span>&#123;</span><br><span class="line">        Thread t = Thread.currentThread();</span><br><span class="line">        ThreadLocalMap map = getMap(t);</span><br><span class="line">        <span class="keyword">if</span> (map != <span class="keyword">null</span>)</span><br><span class="line">            map.set(<span class="keyword">this</span>, value);</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            createMap(t, value);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    从这里可以看出，Looper的准备其实就是在主线程的ThreadLocal的ThreadLocalMap里添加了一个key为ThreadLocal，value为Looper的键值对。</p>
-<p>​    并且static final ThreadLocal<Looper> sThreadLocal = new ThreadLocal<Looper>();ThreadLocal是静态常量，所以只有一个。</Looper></Looper></p>
-<p>​    在set的时候如果map不为空，就会抛出异常，所以Looper也无法更改。</p>
-<p>​    ThreadLocal全系统就只有一个，而Looper可以有多个，但是ThreadLocal可以有多个ThreadLocalMap，每个Map的key都是唯一的ThreadLocal，value就是对应线程的Looper。</p>
-<p>​    因此可以解释为什么一个线程只能有一个Looper和一个ThreadLocalMap了。</p>
-</li>
-<li><p>Looper.loop();</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (;;) &#123;</span><br><span class="line">	Message msg = queue.next()；</span><br><span class="line">    <span class="keyword">if</span> (msg == <span class="keyword">null</span>) &#123;</span><br><span class="line">      <span class="comment">// No message indicates that the message queue is quitting.</span></span><br><span class="line">      <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  msg.target.dispatchMessage(msg);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    在loop中会进入一个无限循环，不停的取出MessageQueue的队头消息，这个循环只有在msg为空的情况下才会跳出循环，而主线程的loop方法只有在程序退出时会结束。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">dispatchMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg.callback != <span class="keyword">null</span>) &#123;</span><br><span class="line">            handleCallback(msg);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (mCallback != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">if</span> (mCallback.handleMessage(msg)) &#123;</span><br><span class="line">                    <span class="keyword">return</span>;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">          handleMessage(msg);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>然后进入dispatchMessage，调入到handleMessage，流程结束。</p>
-</li>
-</ul>
-</li>
-</ul>
-<h1 id="注意点"><a href="#注意点" class="headerlink" title="注意点"></a>注意点</h1><h2 id="消息沉睡唤醒机制"><a href="#消息沉睡唤醒机制" class="headerlink" title="消息沉睡唤醒机制"></a>消息沉睡唤醒机制</h2><p>​    在消息入队和消息出队时，都会有特殊情况的出现，比如队列为空，队列为满，虽然并没有处理队列为满的情况，但是在消息把内存占满的情况下。系统消息无法入队，就会造成手机卡死，所以handler不能用来做定时提醒。</p>
-<p>​    在两种情况下会造成阻塞：</p>
-<ul>
-<li>队列里没有消息时会无限阻塞，直到又有消息入队时会唤醒。</li>
-<li>队列里出队的消息需要延时执行，会阻塞到执行时间。</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">int</span> nextPollTimeoutMillis = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span>(;;)&#123;</span><br><span class="line">    <span class="comment">//沉睡</span></span><br><span class="line">    nativePollOnce(ptr, nextPollTimeoutMillis);</span><br><span class="line">    <span class="comment">//进入循环遍历和等待操作</span></span><br><span class="line">    <span class="keyword">synchronized</span>(<span class="keyword">this</span>)&#123;</span><br><span class="line">        <span class="keyword">if</span> (msg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                    <span class="keyword">if</span> (now &lt; msg.when) &#123;</span><br><span class="line">                        <span class="comment">// Next message is not ready.  Set a timeout to wake up when it is ready.</span></span><br><span class="line">                        nextPollTimeoutMillis = (<span class="keyword">int</span>) Math.min(msg.when - now, Integer.MAX_VALUE);</span><br><span class="line">                    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                        <span class="comment">// Got a message.</span></span><br><span class="line">                        mBlocked = <span class="keyword">false</span>;</span><br><span class="line">                        <span class="keyword">if</span> (prevMsg != <span class="keyword">null</span>) &#123;</span><br><span class="line">                            prevMsg.next = msg.next;</span><br><span class="line">                        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                            mMessages = msg.next;</span><br><span class="line">                        &#125;</span><br><span class="line">                        msg.next = <span class="keyword">null</span>;</span><br><span class="line">                        <span class="keyword">if</span> (DEBUG) Log.v(TAG, <span class="string">"Returning message: "</span> + msg);</span><br><span class="line">                        msg.markInUse();</span><br><span class="line">                        <span class="keyword">return</span> msg;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">// No more messages.</span></span><br><span class="line">                    nextPollTimeoutMillis = -<span class="number">1</span>;</span><br><span class="line">                &#125;</span><br><span class="line">		&#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    这段代码是在一个无限循环中进行的，nextPollTimeoutMillis初始值为0，nativePollOnce沉睡，如果消息执行时间比现在的时间晚，就回计算出间隔时间，并且沉睡这么久，如果队列为空，就会赋值为-1，无限沉睡。</p>
-<p>​    唤醒函数是在插入新的消息时调用。</p>
-<h2 id="线程安全"><a href="#线程安全" class="headerlink" title="线程安全"></a>线程安全</h2><p>​    handler和Looper内部并没有关注线程安全，而是全部交给MessageQueue入队和出队时处理。</p>
-<p>​    在出队时，有一个内置对象锁，锁的是messageQueue对象，所以不同线程的handler发送和取出消息时，都会阻塞。</p>
-<p>​    同理，在入队时也会有一个内置对象锁，锁的是messageQueue对象。</p>
-<h2 id="子线程创建Handler"><a href="#子线程创建Handler" class="headerlink" title="子线程创建Handler"></a>子线程创建Handler</h2><p>​    如果在子线程中创建handler，需要自己执行Looper.prepare,Looper.loop函数，并且在队列为空时需要调用Looper.quit结束loop中的循环。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//Looper</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">quit</span><span class="params">()</span> </span>&#123;</span><br><span class="line">	mQueue.quit(<span class="keyword">false</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">//MessageQueue</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">quit</span><span class="params">(<span class="keyword">boolean</span> safe)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//在主线程中不允许quit操作</span></span><br><span class="line">	<span class="keyword">if</span> (!mQuitAllowed) &#123;</span><br><span class="line">    	<span class="keyword">throw</span> <span class="keyword">new</span> IllegalStateException(<span class="string">"Main thread not allowed to quit."</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">    	<span class="keyword">if</span> (mQuitting) &#123;</span><br><span class="line">           <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//把 mQuitting设置为true</span></span><br><span class="line">        mQuitting = <span class="keyword">true</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//移除消息队列中所有消息</span></span><br><span class="line">        <span class="keyword">if</span> (safe) &#123;</span><br><span class="line">        	removeAllFutureMessagesLocked();</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            removeAllMessagesLocked();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//唤醒next方法中的沉睡线程</span></span><br><span class="line">        <span class="comment">// We can assume mPtr != 0 because mQuitting was previously false.</span></span><br><span class="line">        nativeWake(mPtr);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    此时再进入next中的for循环，在<strong>if (mQuitting) {dispose();return null;}</strong>处返回null，再回到Looper.loop中，<strong>if (msg == null)  return;</strong>结束for循环，当前线程的Looper就停止运作。</p>
-<h2 id="内存泄露"><a href="#内存泄露" class="headerlink" title="内存泄露"></a>内存泄露</h2><ul>
-<li><p>为什么使用Handler会造成内存泄露？</p>
-<p>​    因为内部类调用外部类的方法或者变量，导致内部类持有外部类引用，匿名内部类持有Activity.this，而Message持有Handler，MessageQueue又持有Message，MessageQueue又是在Looper构造函数时创建的，每一个线程就只有一个MessageQueue，而Looper在线程还存活时就一直存在，所以当Activity需要被回收时，根据JVM可达性分析，GC下activity无法被回收，导致内存溢出。</p>
-<p><strong>Looper -&gt; MessageQueue -&gt; Message  -&gt; Handler -&gt;Activity.this</strong></p>
-</li>
-<li><p>为什么其他地方的内部类并不会有这种情况？</p>
-<p>因为handler和Activity生命周期不同，而其它地方生命周期相同，可以同时回收。</p>
-</li>
-</ul>
-<h2 id="Message怎么创建"><a href="#Message怎么创建" class="headerlink" title="Message怎么创建"></a>Message怎么创建</h2><ul>
-<li><p>一般是利用message.obtain方法创建</p>
-</li>
-<li><p>如果频繁的new Message()，会导致内存抖动，gc频繁造成卡顿，有可能OOM</p>
-</li>
-<li><p>如何处理？</p>
-<p>​    在loop中，msg.dispatchMessage被调用之后，会调用msg.recycleUnchecked()，把这个消息插入一个单链表的头部，在调用obtain时，将新的消息赋值给头部结点，将其取出。</p>
-<p>​    这样的好处就是把内存空间一直保留着，不会产生内存碎片，及内存抖动。</p>
-</li>
-</ul>
-<h2 id="loop的死循环阻塞为什么不会导致ANR"><a href="#loop的死循环阻塞为什么不会导致ANR" class="headerlink" title="loop的死循环阻塞为什么不会导致ANR"></a>loop的死循环阻塞为什么不会导致ANR</h2><ul>
-<li>ANR是当事件一段时间无响应时，通过handler新建一个ANR事件，去进行提醒</li>
-<li>ANR发生是因为事件一段时间无响应造成的</li>
-<li>而ANR本身也是一个事件</li>
-<li>而loop里的阻塞是因为没有事情干了，把CPU释放出来沉睡休息，完全没有关联</li>
-</ul>
-<h1 id="同步屏障"><a href="#同步屏障" class="headerlink" title="同步屏障"></a>同步屏障</h1><img src="/2020/10/19/handler/%E5%90%8C%E6%AD%A5%E5%B1%8F%E9%9A%9C.png" class title="同步屏障">
-
-<p>​    如果有需要立刻执行的消息，就可以先调用message.postSyncBarrier()方法发送同步屏障，插入到对头，这条消息的target为null。</p>
-<p>​    然后再把需要立刻执行的消息setAsynchronous(true)设置为异步消息，再send，然后在next方法中：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (msg != <span class="keyword">null</span> &amp;&amp; msg.target == <span class="keyword">null</span>) &#123;</span><br><span class="line">	<span class="comment">// Stalled by a barrier.  Find the next asynchronous message in the queue.</span></span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">    	prevMsg = msg;</span><br><span class="line">        msg = msg.next;</span><br><span class="line">    &#125; <span class="keyword">while</span> (msg != <span class="keyword">null</span> &amp;&amp; !msg.isAsynchronous());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    如果target==null，就直接找到最近的异步消息，立刻执行。</p>
-<p>​    这个机制在ui更新上应用很多，ui每16ms就会刷新一次，就是发送同步屏障和异步消息来实现。</p>
-<h1 id="HandlerThread"><a href="#HandlerThread" class="headerlink" title="HandlerThread"></a>HandlerThread</h1><p>用于方便的把Handler在子线程中使用，其继承于Thread，并且保证了线程安全。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        mTid = Process.myTid();</span><br><span class="line">        Looper.prepare();</span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            mLooper = Looper.myLooper();</span><br><span class="line">            notifyAll();</span><br><span class="line">        &#125;</span><br><span class="line">        Process.setThreadPriority(mPriority);</span><br><span class="line">        onLooperPrepared();</span><br><span class="line">        Looper.loop();</span><br><span class="line">        mTid = -<span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">public</span> Looper <span class="title">getLooper</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (!isAlive()) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// If the thread has been started, wait until the looper has been created.</span></span><br><span class="line">        <span class="keyword">synchronized</span> (<span class="keyword">this</span>) &#123;</span><br><span class="line">            <span class="keyword">while</span> (isAlive() &amp;&amp; mLooper == <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    wait();</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> mLooper;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-<p>通过对象锁和wait、notifyAll保证线程安全。</p>
-<p><strong>使用：</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">HandlerThread handlerThread = <span class="keyword">new</span> HandlerThread(<span class="string">"xxxxxx"</span>);</span><br><span class="line">handlerThread.start();</span><br><span class="line">mHandler = <span class="keyword">new</span> Handler(handlerThread.getLooper());</span><br><span class="line">mHandler.sendMessage();</span><br></pre></td></tr></table></figure>
-
-<h1 id="IntentService"><a href="#IntentService" class="headerlink" title="IntentService"></a>IntentService</h1><p>用于后台服务处理一些异步消息。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onCreate</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>.onCreate();</span><br><span class="line">        HandlerThread thread = <span class="keyword">new</span> HandlerThread(<span class="string">"IntentService["</span> + mName + <span class="string">"]"</span>);</span><br><span class="line">        thread.start();</span><br><span class="line"></span><br><span class="line">        mServiceLooper = thread.getLooper();</span><br><span class="line">        mServiceHandler = <span class="keyword">new</span> ServiceHandler(mServiceLooper);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">onStart</span><span class="params">(@Nullable Intent intent, <span class="keyword">int</span> startId)</span> </span>&#123;</span><br><span class="line">        Message msg = mServiceHandler.obtainMessage();</span><br><span class="line">        msg.arg1 = startId;</span><br><span class="line">        msg.obj = intent;</span><br><span class="line">        mServiceHandler.sendMessage(msg);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span> <span class="keyword">final</span> <span class="class"><span class="keyword">class</span> <span class="title">ServiceHandler</span> <span class="keyword">extends</span> <span class="title">Handler</span> </span>&#123;</span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="title">ServiceHandler</span><span class="params">(Looper looper)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">super</span>(looper);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="meta">@Override</span></span><br><span class="line">        <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">handleMessage</span><span class="params">(Message msg)</span> </span>&#123;</span><br><span class="line">            onHandleIntent((Intent)msg.obj);</span><br><span class="line">            stopSelf(msg.arg1);</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>重写时重写onHandleIntent方法，进行异步任务，</p>
-<p>在OnCreate时利用HandlerThread获取handler，然后在onStart时发送消息，在处理消息时调用onHandleIntent，并且停止服务。</p>
-]]></content>
-  </entry>
-  <entry>
     <title>插件化换肤</title>
     <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
     <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
-  </entry>
-  <entry>
-    <title>RecyclerView回收复用机制</title>
-    <url>/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/</url>
-    <content><![CDATA[<h1 id="一、复用"><a href="#一、复用" class="headerlink" title="一、复用"></a>一、复用</h1><h2 id="1、滑动时的复用入口"><a href="#1、滑动时的复用入口" class="headerlink" title="1、滑动时的复用入口"></a>1、滑动时的复用入口</h2><h3 id="1-1-获取缓存并复用的流程"><a href="#1-1-获取缓存并复用的流程" class="headerlink" title="1.1 获取缓存并复用的流程"></a>1.1 获取缓存并复用的流程</h3><ul>
-<li><p>onTouchEvent </p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">    <span class="keyword">if</span> (scrollByInternal(</span><br><span class="line">                            canScrollHorizontally ? dx : <span class="number">0</span>,</span><br><span class="line">                            canScrollVertically ? dy : <span class="number">0</span>,</span><br><span class="line">                            vtev)) &#123;</span><br><span class="line">                        getParent().requestDisallowInterceptTouchEvent(<span class="keyword">true</span>);</span><br><span class="line">                    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>scrollByInternal</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (x != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedX = mLayout.scrollHorizontallyBy(x, mRecycler, mState);</span><br><span class="line">              unconsumedX = x - consumedX;</span><br><span class="line">          &#125;</span><br><span class="line">          <span class="keyword">if</span> (y != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedY = mLayout.scrollVerticallyBy(y, mRecycler, mState);</span><br><span class="line">              unconsumedY = y - consumedY;</span><br><span class="line">          &#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>scrollVerticallyBy</p>
-<p>直接看LinearLayoutManager里面重写的方法。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mOrientation == HORIZONTAL) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> scrollBy(dy, recycler, state);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>scrollBy</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">int</span> consumed = mLayoutState.mScrollingOffset</span><br><span class="line">                + fill(recycler, mLayoutState, state, <span class="keyword">false</span>);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>fill</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">layoutChunk(recycler, state, layoutState, layoutChunkResult);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>layoutChunk</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">View view = layoutState.next(recycler);</span><br><span class="line">addView(view);</span><br></pre></td></tr></table></figure>
-
-<p>在这里获取到缓存的view并addView添加，完成复用。</p>
-</li>
-</ul>
-<h3 id="1-2-RecyclerView缓存机制"><a href="#1-2-RecyclerView缓存机制" class="headerlink" title="1.2 RecyclerView缓存机制"></a>1.2 RecyclerView缓存机制</h3><p>采用四级缓存：（目的是为了提高性能，具体体现在mCacheViews和RecyclerViewPool）</p>
-<ul>
-<li>mChangeScrap与 mAttachedScrap (用来缓存还在屏幕内的 ViewHolder )</li>
-<li>mCachedViews (用来缓存移除屏幕之外的 ViewHolder )</li>
-<li>mViewCacheExtension (开发给用户的自定义扩展缓存，需要用户自己管理 View 的创建和缓存 )</li>
-<li>RecycledViewPool (ViewHolder 缓存池)</li>
-</ul>
-<h3 id="1-3-复用如何调用缓存"><a href="#1-3-复用如何调用缓存" class="headerlink" title="1.3 复用如何调用缓存"></a>1.3 复用如何调用缓存</h3><ul>
-<li><p>进入next方法看看</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">next</span><span class="params">(RecyclerView.Recycler recycler)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (mScrapList != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> nextViewFromScrapList();</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">final</span> View view = recycler.getViewForPosition(mCurrentPosition);</span><br><span class="line">            mCurrentPosition += mItemDirection;</span><br><span class="line">            <span class="keyword">return</span> view;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>getViewForPosition</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">getViewForPosition</span><span class="params">(<span class="keyword">int</span> position, <span class="keyword">boolean</span> dryRun)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> tryGetViewHolderForPositionByDeadline(position, dryRun, FOREVER_NS).itemView;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>tryGetViewHolderForPositionByDeadline</p>
-<p>分几种情况去获取ViewHolder</p>
-<ul>
-<li>getChangedScrapViewForPosition – mChangeScrap 与动画相关</li>
-<li>getScrapOrHiddenOrCachedHolderForPosition  – mAttachedScrap 、mCachedViews </li>
-<li>getScrapOrCachedViewForId  – mAttachedScrap 、mCachedViews </li>
-<li>mViewCacheExtension.getViewForPositionAndType – 自定义缓存 </li>
-<li>getRecycledViewPool().getRecycledView – 从缓冲池里面获取</li>
-</ul>
-<p>总体流程：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">ViewHolder <span class="title">tryGetViewHolderForPositionByDeadline</span><span class="params">(<span class="keyword">int</span> position,</span></span></span><br><span class="line"><span class="function"><span class="params">               <span class="keyword">boolean</span> dryRun, <span class="keyword">long</span> deadlineNs)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//先从mChangedScrap中获取</span></span><br><span class="line">    holder = getChangedScrapViewForPosition(position);</span><br><span class="line">    <span class="comment">//如果没有获取到，再从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">               holder = getScrapOrHiddenOrCachedHolderForPosition(position, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果没有获取到，这里还有一个方法也是从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span>(holder == <span class="keyword">null</span>)&#123;</span><br><span class="line">        holder = getScrapOrCachedViewForId(mAdapter.getItemId(offsetPosition),</span><br><span class="line">                       type, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，而且自定义了缓存，就从自定义缓存中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span> &amp;&amp; mViewCacheExtension != <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="keyword">final</span> View view = mViewCacheExtension</span><br><span class="line">                           .getViewForPositionAndType(<span class="keyword">this</span>, position, type);</span><br><span class="line">         <span class="keyword">if</span> (view != <span class="keyword">null</span>) &#123;</span><br><span class="line">         	holder = getChildViewHolder(view);</span><br><span class="line">         &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，就从缓冲池里获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">        holder = getRecycledViewPool().getRecycledView(type);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果最后都未获取到缓存，就调用方法createViewHolder</span></span><br><span class="line">     <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">         holder = mAdapter.createViewHolder(RecyclerView.<span class="keyword">this</span>, type);</span><br><span class="line">     &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//holder创建后，绑定布局</span></span><br><span class="line">    bound = tryBindViewHolderByDeadline(holder, offsetPosition, position, deadlineNs);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>进入createViewHolder后，通过子类自定义实现的adapter，重写onCreateViewHolder，来创建viewHolder。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> VH <span class="title">createViewHolder</span><span class="params">(ViewGroup parent, <span class="keyword">int</span> viewType)</span> </span>&#123;</span><br><span class="line">           Trace.beginSection(TRACE_CREATE_VIEW_TAG);</span><br><span class="line">           <span class="keyword">final</span> VH holder = onCreateViewHolder(parent, viewType);</span><br><span class="line">           holder.mItemViewType = viewType;</span><br><span class="line">           Trace.endSection();</span><br><span class="line">           <span class="keyword">return</span> holder;</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
-
-<p>绑定布局流程，进入onBindViewHolder</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">mAdapter.bindViewHolder(holder, offsetPosition);</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">bindViewHolder</span><span class="params">(VH holder, <span class="keyword">int</span> position)</span> </span>&#123;</span><br><span class="line">           onBindViewHolder(holder, position, holder.getUnmodifiedPayloads());</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-</li>
-</ul>
-<h2 id="2、布局时的复用入口"><a href="#2、布局时的复用入口" class="headerlink" title="2、布局时的复用入口"></a>2、布局时的复用入口</h2><ul>
-<li>RecyclerView.OnLayout</li>
-<li>dispatchLayout()</li>
-<li>dispatchLayoutStep2()</li>
-<li>mLayout.onLayoutChildren(mRecycler, mState)</li>
-<li>fill(recycler, mLayoutState, state, false)</li>
-</ul>
-<p>接下来就和之前的步骤相同了。</p>
-<h1 id="二、回收（缓存）"><a href="#二、回收（缓存）" class="headerlink" title="二、回收（缓存）"></a>二、回收（缓存）</h1><h2 id="1、LinearLayoutManager-onLayoutChildren中缓存"><a href="#1、LinearLayoutManager-onLayoutChildren中缓存" class="headerlink" title="1、LinearLayoutManager.onLayoutChildren中缓存"></a>1、LinearLayoutManager.onLayoutChildren中缓存</h2><p>进入ViewHolder中：</p>
-<ul>
-<li>detachAndScrapAttachedViews(recycler)</li>
-<li>scrapOrRecycleView(recycler, i, v)</li>
-<li>recycler.recycleViewHolderInternal(viewHolder) 以及recycler.scrapView(view)两种方式</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">scrapOrRecycleView</span><span class="params">(Recycler recycler, <span class="keyword">int</span> index, View view)</span> </span>&#123;</span><br><span class="line">           <span class="keyword">if</span> (viewHolder.isInvalid() &amp;&amp; !viewHolder.isRemoved()</span><br><span class="line">                   &amp;&amp; !mRecyclerView.mAdapter.hasStableIds()) &#123;</span><br><span class="line">               recycler.recycleViewHolderInternal(viewHolder);</span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               recycler.scrapView(view);</span><br><span class="line">           &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="1-1-recycler-scrapView"><a href="#1-1-recycler-scrapView" class="headerlink" title="1.1 recycler.scrapView"></a>1.1 recycler.scrapView</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">scrapView</span><span class="params">(View view)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span>（。。。）&#123;</span><br><span class="line">        mAttachedScrap.add(holder);</span><br><span class="line">    &#125;<span class="keyword">else</span>&#123;</span><br><span class="line">        mChangedScrap.add(holder);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>在这里只对mAttachedScrap、mChangedScrap进行缓存，直接添加进集合。</p>
-<h3 id="1-2-recycler-recycleViewHolderInternal"><a href="#1-2-recycler-recycleViewHolderInternal" class="headerlink" title="1.2 recycler.recycleViewHolderInternal"></a>1.2 recycler.recycleViewHolderInternal</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">boolean</span> cached = <span class="keyword">false</span>;</span><br><span class="line"><span class="keyword">if</span> (forceRecycle || holder.isRecyclable()) &#123;</span><br><span class="line">    <span class="comment">//这里如果viewHolder发生改变，就不会进入if语句</span></span><br><span class="line">    <span class="keyword">if</span> (mViewCacheMax &gt; <span class="number">0</span> &amp;&amp; !holder.hasAnyOfTheFlags(ViewHolder.FLAG_INVALID</span><br><span class="line">                                | ViewHolder.FLAG_REMOVED</span><br><span class="line">                                | ViewHolder.FLAG_UPDATE</span><br><span class="line">                                | ViewHolder.FLAG_ADAPTER_POSITION_UNKNOWN)) &#123;</span><br><span class="line">        <span class="keyword">int</span> cachedViewSize = mCachedViews.size();</span><br><span class="line">    	<span class="keyword">if</span> (cachedViewSize &gt;= mViewCacheMax &amp;&amp; cachedViewSize &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        	<span class="comment">//mViewCacheMax的值为2</span></span><br><span class="line">        	<span class="comment">//如果mCachedViews大小大于2，就把第一位的viewHolder从mCachedViews里移除，放入缓存池中</span></span><br><span class="line">    		recycleCachedViewAt(<span class="number">0</span>);<span class="comment">//--&gt; 进入方法会调用addViewHolderToRecycledViewPool(viewHolder, true)</span></span><br><span class="line">    		cachedViewSize--;</span><br><span class="line">    	&#125;</span><br><span class="line">        <span class="comment">//往mCachedViews里添加新的viewHolder缓存</span></span><br><span class="line">    	mCachedViews.add(targetCacheIndex, holder);</span><br><span class="line">    	cached = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">	<span class="comment">//相当于如果viewHolder改变，就会把viewHolder直接添加到缓存池中</span></span><br><span class="line">    <span class="keyword">if</span> (!cached) &#123;</span><br><span class="line">    	addViewHolderToRecycledViewPool(holder, <span class="keyword">true</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;<span class="keyword">else</span>&#123;</span><br><span class="line">	 mViewInfoStore.removeViewHolder(holder);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>这个过程可以用下图表示：</p>
-<img src="/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/%E7%BC%93%E5%AD%98.png" class title="缓存">
-
-
-
-<p>缓存池中一个类型的viewHolder最大可以存放五个。</p>
-<p>如果不需要缓存或者缓存池该类型的数组已满，那么就直接把这个viewHolder丢弃，因为缓存池中存放的是viewHolder的类型，不存入也不影响。</p>
-<p>最后在addViewHolderToRecycledViewPool方法中将viewHolder放入缓存池后，把该viewHolder清空。</p>
-<p>addViewHolderToRecycledViewPool - &gt; getRecycledViewPool().putRecycledView(holder) -&gt;  scrap.resetInternal()</p>
-<p>在这个方法中把viewHolder的标记重置，完成清空。</p>
-<p>由此可以看出，在这个方法中，对mCachedViews、RecyclerViewPool进行处理。</p>
-<h2 id="2、LinearLayoutManager-onLayoutChildren的fill中缓存"><a href="#2、LinearLayoutManager-onLayoutChildren的fill中缓存" class="headerlink" title="2、LinearLayoutManager.onLayoutChildren的fill中缓存"></a>2、LinearLayoutManager.onLayoutChildren的fill中缓存</h2><p>会从fill方法中调用 recycler.recycleViewHolderInterna方法，所以在fill这里只会处理mCachedViews和缓存池的缓存。</p>
-<h1 id="三、自定义layoutManager"><a href="#三、自定义layoutManager" class="headerlink" title="三、自定义layoutManager"></a>三、自定义layoutManager</h1><p>调用detachAndScrapAttachedViews(recycler)进行回收复用</p>
-<p>调用recycler.getViewForPosition(i)进行缓存</p>
-]]></content>
-  </entry>
-  <entry>
-    <title>网络框架</title>
-    <url>/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/</url>
-    <content><![CDATA[<h1 id="一、网络基础"><a href="#一、网络基础" class="headerlink" title="一、网络基础"></a>一、网络基础</h1><h2 id="1-计算机网络分层"><a href="#1-计算机网络分层" class="headerlink" title="1. 计算机网络分层"></a>1. 计算机网络分层</h2><img src="/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/tcpip.jpg" class title="tcpip">
-
-<p><strong>OSI七层网络模型(从下往上)</strong>：</p>
-<blockquote>
-<ul>
-<li><strong>物理层(Physical)</strong>：设备之间的数据通信提供传输媒体及互连设备，为数据传输提供可靠的 环境。可以理解为网络传输的物理媒体部分，比如<strong>网卡，网线，集线器，中继器，调制解调器</strong>等！ 在这一层，数据还没有被组织，仅作为原始的位流或电气电压处理，这一层的单位是:<strong>bit比特</strong></li>
-<li><strong>数据链路层(Datalink)</strong>：可以理解为数据通道，主要功能是如何在不可靠的物理线路上进行 数据的可靠传递，改层作用包括：物理地址寻址，数据的成帧，流量控制，数据检错以及重发等！ 另外这个<strong>数据链路指的是</strong>：物理层要为终端设备间的数据通信提供传输媒体及其连接。媒体是 长期的，连接是有生存期的。在连接生存期内，收发两端可以进行不等的一次或多次数据通信。 每次通信都要经过建立通信联络和拆除通信联络两过程！这种建立起来的<strong>数据收发关系</strong>~ 该层的设备有：<strong>网卡，网桥，网路交换机</strong>，另外该层的单位为：<strong>帧</strong></li>
-<li><strong>网络层(Network)</strong>：主要功能是将网络地址翻译成对应的物理地址，并决定如何将数据从发 送方路由到接收方，所谓的路由与寻径：一台终端可能需要与多台终端通信，这样就产生的了 把任意两台终端设备数据链接起来的问题！简单点说就是：建立网络连接和为上层提供服务！ 该层的设备有：<strong>路由</strong>！该层的单位为：<strong>数据包</strong>，另外IP协议就在这一层！</li>
-<li><strong>传输层(Transport)</strong>：向上面的应用层提供通信服务，面向通信部分的最高层，同时也是 用户功能中的最低层。接收会话层数据，在必要时将数据进行分割，并将这些数据交给网络 层，并且保证这些数据段有效的到达对端！所以这层的单位是：<strong>数据段</strong>；而这层有两个很重要 的协议就是：<strong>TCP传输控制协议</strong>与<strong>UDP用户数据报协议</strong>，这也是本章节核心讲解的部分！</li>
-<li><strong>会话层(Session)</strong>：负责在网络中的两节点之间建立、维持和终止通信。建立通信链接， 保持会话过程通信链接的畅通，同步两个节点之间的对话，决定通信是否被中断以及通信中断时 决定从何处重新发送，即不同机器上的用户之间会话的建立及管理！</li>
-<li><strong>表示层(Presentation)</strong>：对来自应用层的命令和数据进行解释，对各种语法赋予相应 的含义，并按照一定的格式传送给会话层。其主要功能是”处理用户信息的表示问题，如编码、 数据格式转换和加密解密，压缩解压缩”等</li>
-<li><strong>应用层(Application)</strong>：OSI参考模型的最高层，为用户的应用程序提供网络服务。 它在其他6层工作的基础上，负责完成网络中应用程序与网络操作系统之间的联系，建立与结束使用者之间的联系，并完成网络用户提出的各种网络服务及应用所需的监督、管理和服务等各种协议。此外，该层还负责协调各个应用程序间的工作。应用层为用户提供的服务和协议有：文件服务、目录服务、文件传输服务（FTP）、远程登录服务（Telnet）、电子邮件服务（E-mail）、打印服务、安全服务、网络管理服务、数据库服务等。</li>
-</ul>
-</blockquote>
-<blockquote>
-<p>TCP/IP是一组协议的代名词，它还包括许多协议，组成了TCP/IP协议簇。 TCP/IP协议簇分为四层，IP位于协议簇的第二层(对应OSI的第三层)，TCP位于协议簇的第三层 (对应OSI的第四层)。TCP/IP通讯协议采用了4层的层级结构，每一层都呼叫它的下一层所提供 的网络来完成自己的需求。这4层分别为：</p>
-<ul>
-<li><strong>应用层</strong>：应用程序间沟通的层，如简单电子邮件传输（SMTP）、文件传输协议（FTP）、 网络远程访问协议（Telnet）等。</li>
-<li><strong>传输层</strong>：在此层中，它提供了节点间的数据传送服务，如传输控制协议（TCP）、 用户数据报协议（UDP）等，TCP和UDP给数据包加入传输数据并把它传输到下一层中， 这一层负责传送数据，并且确定数据已被送达并接收。</li>
-<li><strong>网络互连层</strong>：负责提供基本的数据封包传送功能，让每一块数据包都能够到达目 的主机（但不检查是否被正确接收），如网际协议（IP）。</li>
-<li><strong>主机到网络层</strong>：对实际的网络媒体的管理，定义如何使用实际网络 （如Ethernet、Serial Line等）来传送数据。</li>
-</ul>
-</blockquote>
-<h2 id="2-IP地址-amp-端口号"><a href="#2-IP地址-amp-端口号" class="headerlink" title="2. IP地址&amp;端口号"></a>2. IP地址&amp;端口号</h2><h3 id="2-1-IP地址"><a href="#2-1-IP地址" class="headerlink" title="2.1 IP地址"></a>2.1 IP地址</h3><p>![ip](D:/Android/享学课堂/第一期/网络架构/（01）2019.08.01 Android网络编程基础一—zero/assets/ip.jpg)</p>
-<h3 id="2-2-端口号"><a href="#2-2-端口号" class="headerlink" title="2.2 端口号"></a>2.2 端口号</h3><p>![ip&amp;port](D:/Android/享学课堂/第一期/网络架构/（01）2019.08.01 Android网络编程基础一—zero/assets/ip&amp;port.jpg)</p>
-<p>端口号规定为16位，即允许一个IP主机有2的16次方65535个不同的端口。其中：</p>
-<ul>
-<li><p>0~1023：分配给系统的端口号</p>
-<blockquote>
-<p>我们不可以乱用<br>常用协议使用的端口：HTTP:80，FTP：21，TELNET：23</p>
-</blockquote>
-</li>
-<li><p>1024~49151：登记端口号，主要是让第三方应用使用</p>
-<blockquote>
-<p>但是必须在IANA（互联网数字分配机构）按照规定手续登记，</p>
-</blockquote>
-</li>
-<li><p>49152~65535：短暂端口号，是留给客户进程选择暂时使用，一个进程使用完就可以供其他进程使用。</p>
-</li>
-</ul>
-<blockquote>
-<p>在Socket使用时，可以用1024~65535的端口号</p>
-</blockquote>
-<h3 id="2-3-C-S结构"><a href="#2-3-C-S结构" class="headerlink" title="2.3 C/S结构"></a>2.3 C/S结构</h3><ul>
-<li><p>定义：即客户端/服务器结构，是软件系统体系结构</p>
-</li>
-<li><p>作用：充分利用两端硬件环境的优势，将任务合理分配到Client端和Server端来实现，降低了系统的通讯开销。</p>
-<blockquote>
-<p>Socket正是使用这种结构建立连接的，一个套接字接客户端，一个套接字接服务器。</p>
-</blockquote>
-</li>
-</ul>
-<p>如图：</p>
-<p>![c&amp;s](D:/Android/享学课堂/第一期/网络架构/（01）2019.08.01 Android网络编程基础一—zero/assets/c&amp;s.png)</p>
-<p>可以看出，Socket的使用可以基于TCP或者UDP协议。</p>
-<h2 id="3-TCP-amp-UDP"><a href="#3-TCP-amp-UDP" class="headerlink" title="3. TCP&amp;UDP"></a>3. TCP&amp;UDP</h2><h3 id="3-1-TCP"><a href="#3-1-TCP" class="headerlink" title="3.1 TCP"></a>3.1 TCP</h3><ul>
-<li><p>定义：Transmission Control Protocol，即传输控制协议，是一种传输层通信协议</p>
-<blockquote>
-<p>基于TCP的应用层协议有FTP、Telnet、SMTP、HTTP、POP3与DNS。</p>
-</blockquote>
-</li>
-<li><p>特点：面向连接、面向字节流、全双工通信、可靠</p>
-<ul>
-<li><strong>面向连接</strong>：指的是要使用TCP传输数据，必须先建立TCP连接，传输完成后释放连接，就像打电话一样必须先拨号建立一条连接，打完后挂机释放连接。</li>
-<li><strong>全双工通信</strong>：即一旦建立了TCP连接，通信双方可以在任何时候都能发送数据。</li>
-<li><strong>可靠的</strong>：指的是通过TCP连接传送的数据，无差错，不丢失，不重复，并且按序到达。</li>
-<li><strong>面向字节流</strong>：流，指的是流入到进程或从进程流出的字符序列。简单来说，虽然有时候要传输的数据流太大，TCP报文长度有限制，不能一次传输完，要把它分为好几个数据块，但是由于可靠性保证，接收方可以按顺序接收数据块然后重新组成分块之前的数据流，所以TCP看起来就像直接互相传输字节流一样，面向字节流。</li>
-</ul>
-</li>
-<li><p>TCP建立连接<br>必须进行<strong>三次握手</strong>：若A要与B进行连接，则必须 </p>
-<ul>
-<li>第一次握手：建立连接。客户端发送连接请求报文段，将SYN位置为1，Sequence Number为x；然后，客户端进入SYN_SEND状态，等待服务器的确认。即A发送信息给B</li>
-<li>第二次握手：服务器收到客户端的SYN报文段，需要对这个SYN报文段进行确认。即B收到连接信息后向A返回确认信息</li>
-<li>第三次握手：客户端收到服务器的（SYN+ACK）报文段，并向服务器发送ACK报文段。即A收到确认信息后再次向B返回确认连接信息 </li>
-</ul>
-<blockquote>
-<p>此时，A告诉自己上层连接建立；B收到连接信息后告诉上层连接建立。</p>
-</blockquote>
-</li>
-</ul>
-<p>![3ciwoshou](D:/Android/享学课堂/第一期/网络架构/（01）2019.08.01 Android网络编程基础一—zero/assets/3ciwoshou.png)</p>
-<p>这样就完成TCP三次握手 = 一条TCP连接建立完成 = 可以开始发送数据</p>
-<blockquote>
-<ol>
-<li>三次握手期间任何一次未收到对面回复都要重发。</li>
-<li>最后一个确认报文段发送完毕以后，客户端和服务器端都进入ESTABLISHED状态。</li>
-</ol>
-</blockquote>
-<h4 id="为什么TCP建立连接需要三次握手？"><a href="#为什么TCP建立连接需要三次握手？" class="headerlink" title="为什么TCP建立连接需要三次握手？"></a>为什么TCP建立连接需要三次握手？</h4><p>答：防止服务器端因为接收了<strong>早已失效的连接请求报文</strong>从而一直等待客户端请求，从而浪费资源</p>
-<blockquote>
-<ul>
-<li>“已失效的连接请求报文段”的产生在这样一种情况下：Client发出的第一个连接请求报文段并没有丢失，而是在某个网络结点长时间的滞留了，以致延误到连接释放以后的某个时间才到达server。</li>
-<li>这是一个早已失效的报文段。但Server收到此失效的连接请求报文段后，就误认为是Client再次发出的一个新的连接请求。</li>
-<li>于是就向Client发出确认报文段，同意建立连接。</li>
-<li>假设不采用“三次握手”：只要Server发出确认，新的连接就建立了。</li>
-<li>由于现在Client并没有发出建立连接的请求，因此不会向Server发送数据。</li>
-<li>但Server却以为新的运输连接已经建立，并一直等待Client发来数据。&gt;- 这样，Server的资源就白白浪费掉了。</li>
-</ul>
-</blockquote>
-<p><strong>以上答案只是表象，没有说到本质上去</strong></p>
-<blockquote>
-<p>那么本质是 因为tcp是全双工，为保证传输的可靠性，需要给每次传输的数据段添加序号，那么初始的序列号就是tcp三次握手真正的意义所在，而为了确保交换双方的初始序号，最少需要三次才行</p>
-</blockquote>
-<p>采用“三次握手”的办法可以防止上述现象发生：</p>
-<ul>
-<li><p>Client不会向Server的确认发出确认</p>
-</li>
-<li><p>Server由于收不到确认，就知道Client并没有要求建立连接</p>
-</li>
-<li><p>所以Server不会等待Client发送数据，资源就没有被浪费</p>
-</li>
-<li><p>TCP释放连接<br>TCP释放连接需要<strong>四次挥手</strong>过程，现在假设A主动释放连接：（数据传输结束后，通信的双方都可释放连接）</p>
-<ul>
-<li><p>第一次挥手：A发送释放信息到B；（发出去之后，A-&gt;B发送数据这条路径就断了）</p>
-</li>
-<li><p>第二次挥手：B收到A的释放信息之后，回复确认释放的信息：我同意你的释放连接请求</p>
-</li>
-<li><p>第三次挥手：B发送“请求释放连接“信息给A</p>
-</li>
-<li><p>第四次挥手：A收到B发送的信息后向B发送确认释放信息：我同意你的释放连接请求</p>
-<blockquote>
-<p>B收到确认信息后就会正式关闭连接； A等待2MSL后依然没有收到回复，则证明B端已正常关闭，于是A关闭连接</p>
-</blockquote>
-</li>
-</ul>
-</li>
-</ul>
-<p>![4cihuishou](D:/Android/享学课堂/第一期/网络架构/（01）2019.08.01 Android网络编程基础一—zero/assets/4cihuishou.png)</p>
-<h4 id="为什么TCP释放连接需要四次挥手？"><a href="#为什么TCP释放连接需要四次挥手？" class="headerlink" title="为什么TCP释放连接需要四次挥手？"></a>为什么TCP释放连接需要四次挥手？</h4><p>为了保证双方都能通知对方“需要释放连接”，即在释放连接后都无法接收或发送消息给对方</p>
-<ul>
-<li><p>需要明确的是：TCP是全双工模式，这意味着是双向都可以发送、接收的</p>
-</li>
-<li><p>释放连接的定义是：双方都无法接收或发送消息给对方，是双向的</p>
-</li>
-<li><p>当主机1发出“释放连接请求”（FIN报文段）时，只是表示主机1已经没有数据要发送 / 数据已经全部发送完毕；</p>
-<blockquote>
-<p>但是，这个时候主机1还是可以接受来自主机2的数据。</p>
-</blockquote>
-</li>
-<li><p>当主机2返回“确认释放连接”信息（ACK报文段）时，表示它已经知道主机1没有数据发送了<br>但此时主机2还是可以发送数据给主机1</p>
-</li>
-<li><p>当主机2也发送了FIN报文段时，即告诉主机1我也没有数据要发送了<br>此时，主机1和2已经无法进行通信：主机1无法发送数据给主机2，主机2也无法发送数据给主机1，此时，TCP的连接才算释放</p>
-</li>
-</ul>
-<h4 id="三次握手-amp-四次挥手面试题总结"><a href="#三次握手-amp-四次挥手面试题总结" class="headerlink" title="三次握手&amp;四次挥手面试题总结"></a>三次握手&amp;四次挥手面试题总结</h4><ol>
-<li><p>三次握手是什么或者流程？四次握手呢？答案前面分析就是。</p>
-</li>
-<li><p>为什么建立连接是三次握手，而关闭连接却是四次挥手呢？</p>
-<blockquote>
-<p>这是因为服务端在LISTEN状态下，收到建立连接请求的SYN报文后，把ACK和SYN放在一个报文里发送给客户端。而关闭连接时，当收到对方的FIN报文时，仅仅表示对方不再发送数据了但是还能接收数据，己方也未必全部数据都发送给对方了，所以己方可以立即close，也可以发送一些数据给对方后，再发送FIN报文给对方来表示同意现在关闭连接，因此，己方ACK和FIN一般都会分开发送。</p>
-</blockquote>
-</li>
-</ol>
-<h3 id="3-2-UPD"><a href="#3-2-UPD" class="headerlink" title="3.2 UPD"></a>3.2 UPD</h3><ul>
-<li><p>定义：User Datagram Protocol，即用户数据报协议，是一种传输层通信协议。</p>
-<blockquote>
-<p>基于UDP的应用层协议有TFTP、SNMP与DNS。</p>
-</blockquote>
-</li>
-<li><p>特点：无连接的、不可靠的、面向报文、没有拥塞控制</p>
-<ul>
-<li><strong>无连接的</strong>：和TCP要建立连接不同，UDP传输数据不需要建立连接，就像写信，在信封写上收信人名称、地址就可以交给邮局发送了，至于能不能送到，就要看邮局的送信能力和送信过程的困难程度了。</li>
-<li><strong>不可靠的</strong>：因为UDP发出去的数据包发出去就不管了，不管它会不会到达，所以很可能会出现丢包现象，使传输的数据出错。</li>
-<li><strong>面向报文</strong>：数据报文，就相当于一个数据包，应用层交给UDP多大的数据包，UDP就照样发送，不会像TCP那样拆分。</li>
-<li><strong>没有拥塞控制</strong>：拥塞，是指到达通信子网中某一部分的分组数量过多，使得该部分网络来不及处理，以致引起这部分乃至整个网络性能下降的现象，严重时甚至会导致网络通信业务陷入停顿，即出现死锁现象，就像交通堵塞一样。TCP建立连接后如果发送的数据因为信道质量的原因不能到达目的地，它会不断重发，有可能导致越来越塞，所以需要一个复杂的原理来控制拥塞。而UDP就没有这个烦恼，发出去就不管了。</li>
-</ul>
-</li>
-<li><p>应用场景 很多的实时应用（如IP电话、实时视频会议、某些多人同时在线游戏等）要求源主机以很定的速率发送数据，并且允许在网络发生拥塞时候丢失一些数据，但是要求不能有太大的延时，UDP就刚好适合这种要求。</p>
-</li>
-</ul>
-<h2 id="4-Java中对于网络提供的几个关键类"><a href="#4-Java中对于网络提供的几个关键类" class="headerlink" title="4. Java中对于网络提供的几个关键类"></a>4. Java中对于网络提供的几个关键类</h2><p>针对不同的网络通信层次，Java给我们提供的网络功能有四大类：</p>
-<ul>
-<li>InetAddress： 用于标识网络上的硬件资源</li>
-<li>URL： 统一资源定位符，通过URL可以直接读取或者写入网络上的数据</li>
-<li>Socket和ServerSocket： 使用TCP协议实现网络通信的Socket相关的类</li>
-<li>Datagram： 使用UDP协议，将数据保存在数据报中，通过网络进行通信</li>
-</ul>
-<h2 id="5-Socket"><a href="#5-Socket" class="headerlink" title="5. Socket"></a>5. Socket</h2><h3 id="什么是Socket？"><a href="#什么是Socket？" class="headerlink" title="什么是Socket？"></a>什么是Socket？</h3><ul>
-<li><p>即套接字，<strong>是一个对 TCP / IP协议进行封装 的编程调用接口（API）</strong><br>用來描述IP地址和端口，是通信链的句柄，应用程序可以通过Socket向网络发送请求或者<br>应答网络请求！Socket是支持TCP/IP协议的网络通信的基本操作单元，是对网络通信过程<br>中端点的抽象表示，包含了进行网络通信所必须的五种信息</p>
-<ol>
-<li>连接所使用的的协议</li>
-<li>本地主机的IP地址</li>
-<li>本地远程的协议端口</li>
-<li>远程主机的IP地址</li>
-<li>远地进程的协议端口</li>
-</ol>
-<blockquote>
-<ol>
-<li>即通过<code>Socket</code>，我们才能在Andorid平台上通过 <code>TCP/IP</code>协议进行开发</li>
-<li><code>Socket</code>不是一种协议，而是一个编程调用接口（<code>API</code>），属于传输层（主要解决数据如何在网络中传输）</li>
-<li>成对出现，一对套接字</li>
-</ol>
-</blockquote>
-</li>
-</ul>
-<h3 id="Socket通信模型"><a href="#Socket通信模型" class="headerlink" title="Socket通信模型"></a>Socket通信模型</h3><p>![socket_cs](D:/Android/享学课堂/第一期/网络架构/（01）2019.08.01 Android网络编程基础一—zero/assets/socket_cs.jpg)</p>
-<h3 id="Socket通信步骤"><a href="#Socket通信步骤" class="headerlink" title="Socket通信步骤"></a>Socket通信步骤</h3><ul>
-<li>Step 1：创建ServerSocket和Socket</li>
-<li>Step 2：打开连接到的Socket的输入/输出流</li>
-<li>Step 3：按照协议对Socket进行读/写操作</li>
-<li>Step 4：关闭输入输出流，以及Socket</li>
-</ul>
-<h4 id="Socket服务端的编写"><a href="#Socket服务端的编写" class="headerlink" title="Socket服务端的编写"></a>Socket服务端的编写</h4><ul>
-<li>Step 1：创建ServerSocket对象，绑定监听的端口</li>
-<li>Step 2：调用accept()方法监听客户端的请求</li>
-<li>Step 3：连接建立后，通过输入流读取客户端发送的请求信息</li>
-<li>Step 4：通过输出流向客户端发送响应信息</li>
-<li>Step 5：关闭相关资源</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> IOException </span>&#123;</span><br><span class="line">       <span class="comment">//1.创建一个服务器端Socket，即ServerSocket，指定绑定的端口，并监听此端口</span></span><br><span class="line">       ServerSocket serverSocket = <span class="keyword">new</span> ServerSocket(<span class="number">12345</span>);</span><br><span class="line">       InetAddress address = InetAddress.getLocalHost();</span><br><span class="line">       String ip = address.getHostAddress();</span><br><span class="line">       Socket socket = <span class="keyword">null</span>;</span><br><span class="line">       <span class="comment">//2.调用accept()等待客户端连接</span></span><br><span class="line">       System.out.println(<span class="string">"~~~服务端已就绪，等待客户端接入~，服务端ip地址: "</span> + ip);</span><br><span class="line">       socket = serverSocket.accept();</span><br><span class="line">       <span class="comment">//3.连接后获取输入流，读取客户端信息</span></span><br><span class="line">       InputStream is=<span class="keyword">null</span>;</span><br><span class="line">       InputStreamReader isr=<span class="keyword">null</span>;</span><br><span class="line">       BufferedReader br=<span class="keyword">null</span>;</span><br><span class="line">       OutputStream os=<span class="keyword">null</span>;</span><br><span class="line">       PrintWriter pw=<span class="keyword">null</span>;</span><br><span class="line">       is = socket.getInputStream();     <span class="comment">//获取输入流</span></span><br><span class="line">       isr = <span class="keyword">new</span> InputStreamReader(is,<span class="string">"UTF-8"</span>);</span><br><span class="line">       br = <span class="keyword">new</span> BufferedReader(isr);</span><br><span class="line">       String info = <span class="keyword">null</span>;</span><br><span class="line">       <span class="keyword">while</span>((info=br.readLine())!=<span class="keyword">null</span>)&#123;<span class="comment">//循环读取客户端的信息</span></span><br><span class="line">           System.out.println(<span class="string">"客户端发送过来的信息"</span> + info);</span><br><span class="line">       &#125;</span><br><span class="line">       socket.shutdownInput();<span class="comment">//关闭输入流</span></span><br><span class="line">       socket.close();</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-
-<h4 id="Socket客户端的编写"><a href="#Socket客户端的编写" class="headerlink" title="Socket客户端的编写"></a>Socket客户端的编写</h4><ul>
-<li>Step 1：创建Socket对象，指明需要链接的服务器的地址和端号</li>
-<li>Step 2：链接建立后，通过输出流向服务器发送请求信息</li>
-<li>Step 3：通过输出流获取服务器响应的信息</li>
-<li>Step 4：关闭相关资源</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String ... args)</span> <span class="keyword">throws</span> Exception</span>&#123;</span><br><span class="line">        <span class="comment">//1.创建客户端Socket，指定服务器地址和端口</span></span><br><span class="line">        Socket socket = <span class="keyword">new</span> Socket(<span class="string">"127.0.0.1"</span>, <span class="number">12345</span>);</span><br><span class="line">        <span class="comment">//2.获取输出流，向服务器端发送信息</span></span><br><span class="line">        OutputStream os = socket.getOutputStream();<span class="comment">//字节输出流</span></span><br><span class="line">        PrintWriter pw = <span class="keyword">new</span> PrintWriter(os);<span class="comment">//将输出流包装为打印流</span></span><br><span class="line">        <span class="comment">//获取客户端的IP地址</span></span><br><span class="line">        InetAddress address = InetAddress.getLocalHost();</span><br><span class="line">        String ip = address.getHostAddress();</span><br><span class="line">        pw.write(<span class="string">"客户端：~"</span> + ip + <span class="string">"~ 接入服务器！！"</span>);</span><br><span class="line">        pw.flush();</span><br><span class="line">        socket.shutdownOutput();<span class="comment">//关闭输出流</span></span><br><span class="line">        socket.close();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-
-
-
-
-]]></content>
-  </entry>
-  <entry>
-    <title>事件分发二级联动</title>
-    <url>/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/</url>
-    <content><![CDATA[<h2 id="1-事件分发流程"><a href="#1-事件分发流程" class="headerlink" title="1 事件分发流程"></a>1 事件分发流程</h2><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%872.png" class title="分发流程">
-
-<ul>
-<li><p>从控件回调回activity开始分发，调用dispatchTouchEvent</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">dispatchTouchEvent</span><span class="params">(MotionEvent ev)</span> </span>&#123;</span><br><span class="line">      <span class="keyword">if</span> (ev.getAction() == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">          onUserInteraction();</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">if</span> (getWindow().superDispatchTouchEvent(ev)) &#123;</span><br><span class="line">          <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">return</span> onTouchEvent(ev);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>进入PhoneWindow中</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">superDispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">return</span> mDecor.superDispatchTouchEvent(event);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>进入DecorView中</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">superDispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">       <span class="keyword">return</span> <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-
-<p>此时调用父类的dispatchTouchEvent方法，而DecorView的父类是FragmentLayout，并没有重写dispatchTouchEvent方法，所以交给它的父类ViewGroup来调用。</p>
-</li>
-<li><p>从而进一步就进入了View和ViewGroup的树形结构</p>
-<img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%871.png" class title="树形结构">
-
-</li>
-</ul>
-<h3 id="1-1-事件处理（View）"><a href="#1-1-事件处理（View）" class="headerlink" title="1.1 事件处理（View）"></a>1.1 事件处理（View）</h3><ul>
-<li><p>view的dispatchTouchEvent方法</p>
-</li>
-<li><p>关键代码</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">   <span class="keyword">if</span> (onFilterTouchEventForSecurity(event)) &#123;</span><br><span class="line">         <span class="keyword">if</span> ((mViewFlags &amp; ENABLED_MASK) == ENABLED &amp;&amp; handleScrollBarDragging(event)) &#123;</span><br><span class="line">             result = <span class="keyword">true</span>;</span><br><span class="line">         &#125;</span><br><span class="line">         <span class="comment">/**这一段最关键</span></span><br><span class="line"><span class="comment">         ListenerInfo li = mListenerInfo;</span></span><br><span class="line"><span class="comment">         if (li != null &amp;&amp; li.mOnTouchListener != null</span></span><br><span class="line"><span class="comment">                 &amp;&amp; (mViewFlags &amp; ENABLED_MASK) == ENABLED</span></span><br><span class="line"><span class="comment">                 &amp;&amp; li.mOnTouchListener.onTouch(this, event)) &#123;</span></span><br><span class="line"><span class="comment">             result = true;</span></span><br><span class="line"><span class="comment">         &#125;</span></span><br><span class="line"><span class="comment">**/</span></span><br><span class="line">         <span class="keyword">if</span> (!result &amp;&amp; onTouchEvent(event)) &#123;</span><br><span class="line">             result = <span class="keyword">true</span>;</span><br><span class="line">         &#125;</span><br><span class="line">     &#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    其中mListenerInfo是只要调用了setOnTouchLisener就会初始化的。</p>
-<p>​    判断中的前三个条件都为true，进行到第四个条件的判断，只要OnTouch方法返回的是true，那么result就为true，否则为false。</p>
-<p>​    而result为true时，在下一个if语句中，就无法调用到onTouchEvent，无法在其中调用onClick方法，所以这就是为什么onTouch返回值为true时，onClick事件被拦截。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">performClickInternal() -&gt; performClick() -&gt; li.mOnClickListener.onClick(<span class="keyword">this</span>);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>当然满足这一切的条件时clickable要为true</p>
-</li>
-</ul>
-<h3 id="1-2-事件分发（ViewGroup）"><a href="#1-2-事件分发（ViewGroup）" class="headerlink" title="1.2 事件分发（ViewGroup）"></a>1.2 事件分发（ViewGroup）</h3><img src="/2020/07/28/%E4%BA%8B%E4%BB%B6%E5%88%86%E5%8F%91%E4%BA%8C%E7%BA%A7%E8%81%94%E5%8A%A8/%E5%9B%BE%E7%89%873.png" class title="事件分发例子">
-
-<h3 id="1-2-1-ACTION-DOWN"><a href="#1-2-1-ACTION-DOWN" class="headerlink" title="1.2.1 ACTION_DOWN"></a>1.2.1 ACTION_DOWN</h3><p>首先会清除所有标记</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">             <span class="comment">// Throw away all previous state when starting a new touch gesture.</span></span><br><span class="line">             <span class="comment">// The framework may have dropped the up or cancel event for the previous gesture</span></span><br><span class="line">             <span class="comment">// due to an app switch, ANR, or some other state change.</span></span><br><span class="line">             cancelAndClearTouchTargets(ev);</span><br><span class="line">             resetTouchState();</span><br><span class="line">         &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h4 id="1-2-1-1-拦截"><a href="#1-2-1-1-拦截" class="headerlink" title="1.2.1.1 拦截"></a>1.2.1.1 拦截</h4><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// Check for interception.</span></span><br><span class="line"><span class="keyword">final</span> <span class="keyword">boolean</span> intercepted;</span><br><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br><span class="line">        || mFirstTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="keyword">final</span> <span class="keyword">boolean</span> disallowIntercept = (mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">if</span> (!disallowIntercept) &#123;</span><br><span class="line">        intercepted = onInterceptTouchEvent(ev);</span><br><span class="line">        ev.setAction(action); <span class="comment">// restore action in case it was changed</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        intercepted = <span class="keyword">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// There are no touch targets and this action is not an initial down</span></span><br><span class="line">    <span class="comment">// so this view group continues to intercept touches.</span></span><br><span class="line">    intercepted = <span class="keyword">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    可以看到intercepted被赋值为onInterceptTouchEvent(ev)的返回值。</p>
-<p>​    如果被拦截，则intercepted为true</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canceled &amp;&amp; !intercepted)</span><br></pre></td></tr></table></figure>
-
-<p>​    无法进入这个if语句，去进行与分发相关的操作。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mFirstTouchTarget == <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="comment">// No touch targets so treat this as an ordinary view.</span></span><br><span class="line">    handled = dispatchTransformedTouchEvent(ev, canceled, <span class="keyword">null</span>,</span><br><span class="line">            TouchTarget.ALL_POINTER_IDS);</span><br></pre></td></tr></table></figure>
-
-<p>​    在这一个if语句里进行事件的分发或者处理，进入dispatchTransformedTouchEvent方法。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (child == <span class="keyword">null</span>) &#123;</span><br><span class="line">    handled = <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    handled = child.dispatchTouchEvent(event);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    在dispatchTransformedTouchEvent里可以看到，因为调用时child此参数传入为null，所以直接调用父类View的dispatchTouchEvent方法，去处理这个事件，即这个事件被拦截在这个ViewGroup。</p>
-<h4 id="1-2-1-2-不拦截"><a href="#1-2-1-2-不拦截" class="headerlink" title="1.2.1.2 不拦截"></a>1.2.1.2 不拦截</h4><p>​    如果不拦截，则intercepted为false。</p>
-<p>​    进入第二个if语句。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br></pre></td></tr></table></figure>
-
-<p>如果为ACTION_DOWN就进入这个if语句</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (newTouchTarget == <span class="keyword">null</span> &amp;&amp; childrenCount != <span class="number">0</span>)</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> ArrayList&lt;View&gt; preorderedList = buildTouchDispatchChildList()</span><br></pre></td></tr></table></figure>
-
-<p>​    进入这个if语句，并且通过buildTouchDispatchChildList()方法构造一个数组用于存放ViewGroup中的View，并且写在上面的view会放在数组后面，拿也是从数组后面开始拿。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="keyword">int</span> i = childrenCount - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--)</span><br></pre></td></tr></table></figure>
-
-<p>​    进入for循环，遍历当前ViewGroup的所有子View。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canViewReceivePointerEvents(child)</span><br><span class="line">        || !isTransformedTouchPointInView(x, y, child, <span class="keyword">null</span>)) &#123;</span><br><span class="line">    ev.setTargetAccessibilityFocus(<span class="keyword">false</span>);</span><br><span class="line">    <span class="keyword">continue</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>两个条件：</p>
-<ul>
-<li><pre><code class="java"><span class="function"><span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">boolean</span> <span class="title">canViewReceivePointerEvents</span><span class="params">(@NonNull View child)</span> </span>{
-    <span class="keyword">return</span> (child.mViewFlags &amp; VISIBILITY_MASK) == VISIBLE
-            || child.getAnimation() != <span class="keyword">null</span>;
-}
-&lt;!--￼<span class="number">15</span>--&gt;
-
-这个表示点击区域是否是View所在的区域。
-</code></pre>
-</li>
-</ul>
-<p>如果满足其中任意一个，就continue，直接遍历到下一个child。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (newTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">    <span class="comment">// Child is already receiving touch within its bounds.</span></span><br><span class="line">    <span class="comment">// Give it the new pointer in addition to the ones it is handling.</span></span><br><span class="line">    newTouchTarget.pointerIdBits |= idBitsToAssign;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>如果newTouchTarget不为null，就直接结束循环。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, <span class="keyword">false</span>, child, idBitsToAssign)) &#123;</span><br><span class="line">    <span class="comment">// Child wants to receive touch within its bounds.</span></span><br><span class="line">    mLastTouchDownTime = ev.getDownTime();</span><br><span class="line">    <span class="keyword">if</span> (preorderedList != <span class="keyword">null</span>) &#123;</span><br><span class="line">        <span class="comment">// childIndex points into presorted list, find original index</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">int</span> j = <span class="number">0</span>; j &lt; childrenCount; j++) &#123;</span><br><span class="line">            <span class="keyword">if</span> (children[childIndex] == mChildren[j]) &#123;</span><br><span class="line">                mLastTouchDownIndex = j;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mLastTouchDownIndex = childIndex;</span><br><span class="line">    &#125;</span><br><span class="line">    mLastTouchDownX = ev.getX();</span><br><span class="line">    mLastTouchDownY = ev.getY();</span><br><span class="line">    <span class="comment">//参数赋值</span></span><br><span class="line">    newTouchTarget = addTouchTarget(child, idBitsToAssign);</span><br><span class="line">    alreadyDispatchedToNewTouchTarget = <span class="keyword">true</span>;</span><br><span class="line">    <span class="keyword">break</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    在这里可以看到，如果dispatchTransformedTouchEvent(ev, false, child, idBitsToAssign)返回true，则进入对一些参数进行赋值并且结束循环，如果为false，则继续进行下去开始下一次循环。</p>
-<p>​    <strong>在dispatchTransformedTouchEvent方法中，此时child不为null，所以调用child的dispatchTouchEvent方法，即肯定是ViewGroup的。</strong></p>
-<p>​    进行完参数赋值之后，newTouchTarget == mFirstTouchTarget，target.next==null，    alreadyDispatchedToNewTouchTarget = true。</p>
-<ul>
-<li><p>在这个if语句中，如果返回值一直为false，即所有子View都不处理事件，则和拦截的情况没有区别，全部交给当前ViewGroup处理。</p>
-</li>
-<li><p>如果返回值有true，则带着变化的参数进入第三个if语句</p>
-<ul>
-<li><p>将进入else</p>
-</li>
-<li><pre><code class="java"><span class="keyword">while</span> (target != <span class="keyword">null</span>) {
-    <span class="keyword">final</span> TouchTarget next = target.next;
-    <span class="keyword">if</span> (alreadyDispatchedToNewTouchTarget &amp;&amp; target == newTouchTarget) {
-        handled = <span class="keyword">true</span>;
-    } <span class="keyword">else</span> {
-        <span class="keyword">final</span> <span class="keyword">boolean</span> cancelChild = resetCancelNextUpFlag(target.child)
-                || intercepted;
-        <span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, cancelChild,
-                target.child, target.pointerIdBits)) {
-            handled = <span class="keyword">true</span>;
-        }
-        <span class="keyword">if</span> (cancelChild) {
-            <span class="keyword">if</span> (predecessor == <span class="keyword">null</span>) {
-                mFirstTouchTarget = next;
-            } <span class="keyword">else</span> {
-                predecessor.next = next;
-            }
-            target.recycle();
-            target = next;
-            <span class="keyword">continue</span>;
-        }
-    }
-    predecessor = target;
-    target = next;
-}
-&lt;!--￼<span class="number">18</span>--&gt;
-
-肯定为<span class="keyword">true</span>，所以handled为<span class="keyword">true</span>，函数最终返回<span class="keyword">true</span>，代表这个事件我不处理。
-
-
-</code></pre>
-</li>
-</ul>
-</li>
-</ul>
-<h3 id="1-2-2-ACTION-MOVE"><a href="#1-2-2-ACTION-MOVE" class="headerlink" title="1.2.2 ACTION_MOVE"></a>1.2.2 ACTION_MOVE</h3><p>​    同样是从DecorView这一层的dispatchTouchEvent方法开始。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN</span><br><span class="line">               || mFirstTouchTarget != <span class="keyword">null</span>) &#123;</span><br><span class="line">           <span class="keyword">final</span> <span class="keyword">boolean</span> disallowIntercept = (mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>;</span><br><span class="line">           <span class="keyword">if</span> (!disallowIntercept) &#123;</span><br><span class="line">               intercepted = onInterceptTouchEvent(ev);</span><br><span class="line">               ev.setAction(action); <span class="comment">// restore action in case it was changed</span></span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               intercepted = <span class="keyword">false</span>;</span><br><span class="line">           &#125;</span><br></pre></td></tr></table></figure>
-<p>​    此时mFirstTouchTarget != null成立，所以还是一样的intercepted赋值。</p>
-<p>​    因此进入这个if语句</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!canceled &amp;&amp; !intercepted)</span><br></pre></td></tr></table></figure>
-
-<p>​    第二个if语句因为是MOVE事件，所以无法进入，进入第三个if语句的else</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mFirstTouchTarget == <span class="keyword">null</span>)</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (alreadyDispatchedToNewTouchTarget &amp;&amp; target == newTouchTarget) &#123;</span><br><span class="line">                   handled = <span class="keyword">true</span>;</span><br><span class="line">               &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                   <span class="keyword">final</span> <span class="keyword">boolean</span> cancelChild = resetCancelNextUpFlag(target.child)</span><br><span class="line">                           || intercepted;</span><br><span class="line">                   <span class="keyword">if</span> (dispatchTransformedTouchEvent(ev, cancelChild,</span><br><span class="line">                           target.child, target.pointerIdBits)) &#123;</span><br><span class="line">                       handled = <span class="keyword">true</span>;</span><br><span class="line">                   &#125;</span><br><span class="line">                   <span class="keyword">if</span> (cancelChild) &#123;</span><br><span class="line">                       <span class="keyword">if</span> (predecessor == <span class="keyword">null</span>) &#123;</span><br><span class="line">                           mFirstTouchTarget = next;</span><br><span class="line">                       &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                           predecessor.next = next;</span><br><span class="line">                       &#125;</span><br><span class="line">                       target.recycle();</span><br><span class="line">                       target = next;</span><br><span class="line">                       <span class="keyword">continue</span>;</span><br><span class="line">                   &#125;</span><br><span class="line">               &#125;</span><br></pre></td></tr></table></figure>
-<p>​    此时alreadyDispatchedToNewTouchTarget已经被重新赋值为false，所以进入else，cancelchild为false，调用</p>
-<p>dispatchTransformedTouchEvent(ev, cancelChild,target.child, target.pointerIdBits)，target.child，直接把事件交给之前已经放入数组中的View或者ViewGroup处理。</p>
-<p>​    <strong>由此可以看出，MOVE事件并不分发，因为没有进入第二个if语句中的循环部分。</strong></p>
-<h2 id="2-处理事件冲突"><a href="#2-处理事件冲突" class="headerlink" title="2 处理事件冲突"></a>2 处理事件冲突</h2><p>只能在MOVE事件时处理事件冲突！</p>
-<h3 id="2-1-内部拦截法（子View进行拦截）"><a href="#2-1-内部拦截法（子View进行拦截）" class="headerlink" title="2.1 内部拦截法（子View进行拦截）"></a>2.1 内部拦截法（子View进行拦截）</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (!disallowIntercept) &#123;</span><br><span class="line">                    intercepted = onInterceptTouchEvent(ev);</span><br><span class="line">                    ev.setAction(action); <span class="comment">// restore action in case it was changed</span></span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    intercepted = <span class="keyword">false</span>;</span><br><span class="line">                &#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    在父View调用requestDisallowInterceptTouchEvent方法，改动disallowIntercept的值为true，则intercepted就肯定为false，可以进入之后的分发过程。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">    <span class="keyword">if</span> (disallowIntercept == ((mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>)) &#123;</span><br><span class="line">        <span class="comment">// We're already in this state, assume our ancestors are too</span></span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (disallowIntercept) &#123;</span><br><span class="line">        mGroupFlags |= FLAG_DISALLOW_INTERCEPT;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        mGroupFlags &amp;= ~FLAG_DISALLOW_INTERCEPT;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Pass it up to our parent</span></span><br><span class="line">    <span class="keyword">if</span> (mParent != <span class="keyword">null</span>) &#123;</span><br><span class="line">        mParent.requestDisallowInterceptTouchEvent(disallowIntercept);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p>​    在这里改动mGroupFlags的值，让disallowIntercept的值也发生改变。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">boolean</span> disallowIntercept = (mGroupFlags &amp; FLAG_DISALLOW_INTERCEPT) != <span class="number">0</span>;</span><br></pre></td></tr></table></figure>
-
-<p><strong>实现：</strong></p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">   <span class="comment">// 内部拦截法：子view处理事件冲突</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">int</span> mLastX, mLastY;</span><br><span class="line"><span class="comment">//</span></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">dispatchTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span> x = (<span class="keyword">int</span>) event.getX();</span><br><span class="line">        <span class="keyword">int</span> y = (<span class="keyword">int</span>) event.getY();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">switch</span> (event.getAction()) &#123;</span><br><span class="line">            <span class="keyword">case</span> MotionEvent.ACTION_DOWN: &#123;</span><br><span class="line">                getParent().requestDisallowInterceptTouchEvent(<span class="keyword">true</span>);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">                <span class="keyword">int</span> deltaX = x - mLastX;</span><br><span class="line">                <span class="keyword">int</span> deltaY = y - mLastY;</span><br><span class="line">                <span class="keyword">if</span> (Math.abs(deltaX) &gt; Math.abs(deltaY)) &#123;</span><br><span class="line">                    getParent().requestDisallowInterceptTouchEvent(<span class="keyword">false</span>);</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">case</span> MotionEvent.ACTION_UP: &#123;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        mLastX = x;</span><br><span class="line">        mLastY = y;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">super</span>.dispatchTouchEvent(event);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
-
-<ul>
-<li><p>在DOWN事件时把disallowIntercept设置为true，让子View可以接受到事件</p>
-</li>
-<li><p>在MOVE事件时判断滑动方向，如果为左右，就交给父View处理，如果为上下，就自己处理</p>
-</li>
-<li><p>还有一个小点需要注意</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (actionMasked == MotionEvent.ACTION_DOWN) &#123;</span><br><span class="line">               <span class="comment">// Throw away all previous state when starting a new touch gesture.</span></span><br><span class="line">               <span class="comment">// The framework may have dropped the up or cancel event for the previous gesture</span></span><br><span class="line">               <span class="comment">// due to an app switch, ANR, or some other state change.</span></span><br><span class="line">               cancelAndClearTouchTargets(ev);</span><br><span class="line">               resetTouchState();</span><br><span class="line">           &#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    这段代码会清除所有标记，所以在DOWN事件时，会把mGroupFlags的值也清除，因此getParent().requestDisallowInterceptTouchEvent(true)这个设置也就不起作用，我们需要在父View中再进行处理。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (event.getAction() == MotionEvent.ACTION_DOWN)&#123;</span><br><span class="line">    <span class="keyword">super</span>.onInterceptTouchEvent(event);</span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">false</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">return</span> <span class="keyword">true</span>;</span><br></pre></td></tr></table></figure>
-
-<p>​    在父View中判断为DOWN事件时，就不拦截，交给子View处理。</p>
-</li>
-</ul>
-<h3 id="2-2-外部拦截法（父View进行拦截）"><a href="#2-2-外部拦截法（父View进行拦截）" class="headerlink" title="2.2 外部拦截法（父View进行拦截）"></a>2.2 外部拦截法（父View进行拦截）</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">// 外部拦截法：父容器处理冲突</span></span><br><span class="line"><span class="comment">// 我想要把事件分发给谁就分发给谁</span></span><br><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">boolean</span> <span class="title">onInterceptTouchEvent</span><span class="params">(MotionEvent event)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span> x = (<span class="keyword">int</span>) event.getX();</span><br><span class="line">    <span class="keyword">int</span> y = (<span class="keyword">int</span>) event.getY();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">switch</span> (event.getAction()) &#123;</span><br><span class="line">        <span class="keyword">case</span> MotionEvent.ACTION_DOWN: &#123;</span><br><span class="line">            mLastX = (<span class="keyword">int</span>) event.getX();</span><br><span class="line">            mLastY = (<span class="keyword">int</span>) event.getY();</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">            <span class="keyword">int</span> deltaX = x - mLastX;</span><br><span class="line">            <span class="keyword">int</span> deltaY = y - mLastY;</span><br><span class="line">            <span class="keyword">if</span> (Math.abs(deltaX) &gt; Math.abs(deltaY)) &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="keyword">true</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">case</span> MotionEvent.ACTION_UP: &#123;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">super</span>.onInterceptTouchEvent(event);</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>​    同样的，如果滑动方向为左右，则返回true拦截事件自己处理，反之分发。</p>
-<h3 id="2-3-MOVE过程中的变化"><a href="#2-3-MOVE过程中的变化" class="headerlink" title="2.3 MOVE过程中的变化"></a>2.3 MOVE过程中的变化</h3><p>​    在DOWN事件交给了子View处理，在第一次MOVE事件时就也是交给子View处理，如果在这个时候把滑动方向转换为了左右，那么在disptachTransformTouchEvent这个方法时就会触发CANCEL事件，并且是由子View发起的，在第二次MOVE事件时，mFirstTragetView变为了null，将被拦截，交给父View处理。</p>
-<p>​    <strong>所以，如果一个View或者ViewGroup没有拿到DOWN事件，那么他一定拿不到MOVE事件，这句话只对叶子节点是正确的。</strong></p>
-]]></content>
-  </entry>
-  <entry>
-    <title>View的创建流程</title>
-    <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
-    <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
-
-<h2 id="ActivityThread"><a href="#ActivityThread" class="headerlink" title="ActivityThread"></a>ActivityThread</h2><ul>
-<li><p>performLaunchActivity(ActivityClientRecord r, Intent customIntent)，在这个方法中进行一系列初始化工作</p>
-</li>
-<li><p>ContextImpl appContext = createBaseContextForActivity(r)，进行上下文初始化</p>
-</li>
-<li><p>activity = mInstrumentation.newActivity(cl, component.getClassName(), r.intent)，进行activity的初始化</p>
-</li>
-<li><p>window = r.mPendingRemoveWindow，创建一个window，但是此时的window为null</p>
-<ul>
-<li><p>r.mPendingRemoveWindow = r.window</p>
-</li>
-<li><p>r.window = r.activity.getWindow()</p>
-</li>
-<li><p>所以说window是从Activity类中的getWindow()里获取的</p>
-</li>
-<li><pre><code class="java">    <span class="function"><span class="keyword">public</span> Window <span class="title">getWindow</span><span class="params">()</span> </span>{
-        <span class="keyword">return</span> mWindow;
-    }
-&lt;!--￼<span class="number">0</span>--&gt;
-</code></pre>
-</li>
-</ul>
-<p>通过这个方法把window与activity进行绑定，实际上是在attach方法中调用了 mWindow = new PhoneWindow(this, window, activityConfigCallback)，创建了一个新的PhoneWindow。</p>
-</li>
-<li><p>此时的结构：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%80%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第一次结构">
-</li>
-<li><p>mInstrumentation.callActivityOnCreate(activity, r.state, r.persistentState)，呼叫activity调用oncreate方法</p>
-</li>
-</ul>
-<h2 id="PhoneWindow"><a href="#PhoneWindow" class="headerlink" title="PhoneWindow"></a>PhoneWindow</h2><ul>
-<li><p>在OnCreate中调用setContentView方法加载布局文件</p>
-</li>
-<li><p>installDecor()，对decor进行一系列操作</p>
-<ul>
-<li><p>mDecor = generateDecor(-1)，初始化decor，return new DecorView(context, featureId, this, getAttributes())，返回一个DecorView。</p>
-</li>
-<li><p>mContentParent = generateLayout(mDecor)，PhoneWindow中的 mContentParent的初始化，其实就是一个DecorView。</p>
-</li>
-<li><p>generateLayout(mDecor)中，mDecor.onResourcesLoaded(mLayoutInflater, layoutResource)</p>
-<ul>
-<li>layoutResource就是传入的布局文件</li>
-<li>mLayoutInflater为布局加载器</li>
-<li>final View root = inflater.inflate(layoutResource, null)</li>
-<li>addView(root, 0, new ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))</li>
-<li>通过前两步把布局文件加载为View并且添加进去</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%BA%8C%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第二次结构">
-</li>
-</ul>
-</li>
-<li><p>mLayoutInflater.inflate(layoutResID, mContentParent)</p>
-<ul>
-<li>final View temp = createViewFromTag(root, name, inflaterContext, attrs)<ul>
-<li>view = createView(name, null, attrs)，在这个函数里通过反射调用有两个参数的构造函数进行初始化</li>
-<li>view = mFactory2.onCreateView(parent, name, context, attrs)，Factory2是一个接口，提供OnCreateView方法，让开发者可以继承接口去实现View的初始化过程中的一些操作，只有当mFactory2不为null时，才会调用这个方法</li>
-</ul>
-</li>
-<li>params = root.generateLayoutParams(attrs)，new一个LayoutParams对象</li>
-<li>temp.setLayoutParams(params)，给加载出来的view设置LayoutParams</li>
-</ul>
-</li>
-<li><p>此时状态：</p>
-<img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E7%AC%AC%E4%B8%89%E6%AC%A1%E7%BB%93%E6%9E%84.png" class title="第三次结构">
-</li>
-<li><p>关于inflate的attachToRoot参数的解析</p>
-<ul>
-<li>这里用true,就表示解析出来的view参数用父view的并由系统完成addview</li>
-<li>用false,就由用户自己去修改参数后，再手动addview添加到布局中，如果没有写addview，则xml中的属性都获取不到</li>
-<li>addview里面有个异常能保证addView中执行一次，也就保证了view的体系结构永远是树型 ，每个节点只有一个父节点</li>
-</ul>
-</li>
-</ul>
-]]></content>
   </entry>
   <entry>
     <title>数据结构与算法</title>
@@ -2138,80 +1908,6 @@
 ]]></content>
   </entry>
   <entry>
-    <title>设计模式</title>
-    <url>/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/</url>
-    <content><![CDATA[<h1 id="一、设计模式六大原则"><a href="#一、设计模式六大原则" class="headerlink" title="一、设计模式六大原则"></a>一、设计模式六大原则</h1><ul>
-<li>单一职责原则：一个类就只负责一个工作</li>
-<li>里氏替换原则：子类可以拓展功能，但是不要替换父类的功能</li>
-<li>依赖倒置原则：面向接口编程</li>
-<li>迪米特法则：耦合度降低，不能在方法中新增没有的类</li>
-<li>开闭原则：对扩展开放，对修改关闭，即新增功能时最好不要修改原有代码</li>
-<li>接口隔离原则：接口功能要最小单元化</li>
-</ul>
-<h1 id="二、设计模式"><a href="#二、设计模式" class="headerlink" title="二、设计模式"></a>二、设计模式</h1><h2 id="1、简单工厂模式"><a href="#1、简单工厂模式" class="headerlink" title="1、简单工厂模式"></a>1、简单工厂模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AE%80%E5%8D%95%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="简单工厂模式">
-
-<h2 id="2、工厂方法模式"><a href="#2、工厂方法模式" class="headerlink" title="2、工厂方法模式"></a>2、工厂方法模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%B7%A5%E5%8E%82%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="工厂方法模式">
-
-<p>​    当水果数量越来越多时，简单工厂模式会越来越复杂，违背了单一职责原则、开闭原则，所以需要把每个水果单一创建一个工厂。</p>
-<h2 id="3、抽象工厂模式"><a href="#3、抽象工厂模式" class="headerlink" title="3、抽象工厂模式"></a>3、抽象工厂模式</h2><p>​    工厂方法模式有一个缺点，就是当新加入了一个工厂后，同一个对象可能会调用出现错误，为了避免这种错误，可以使用抽象工厂模式。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%8A%BD%E8%B1%A1%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="抽象工厂模式">
-
-<h2 id="4、建造者模式"><a href="#4、建造者模式" class="headerlink" title="4、建造者模式"></a>4、建造者模式</h2><p>​    建造者模式实际上也是工厂模式的一种，Builder就是一个工厂，它和工厂模式的不同之处就在于它是有一个模板的，所有事情都会按照这个模板来进行。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%BB%BA%E9%80%A0%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="建造者模式">
-
-<h2 id="5、工厂模式总结"><a href="#5、工厂模式总结" class="headerlink" title="5、工厂模式总结"></a>5、工厂模式总结</h2><ul>
-<li>原则<ul>
-<li>解耦：把对象的创建和使用的过程分开</li>
-<li>工厂负责对象的创建，包括其init方法的调用，黑盒创建过程</li>
-<li>面向接口编程： 使用者只管使用，只知其接口而不知其实现类</li>
-</ul>
-</li>
-<li>对比<ul>
-<li>静态工厂：把所有对象的创建逻辑集中到一个（专业）类里处理</li>
-<li>工厂方法模式：一个工厂负责创建一个产品类的创建</li>
-<li>将一个系列的产品的工厂合并成一个工厂，负责生产这个系列的产品</li>
-<li>对象的创建比较复杂时，按步骤一块块创建，让创建过程模板化</li>
-</ul>
-</li>
-</ul>
-<h2 id="6、单例模式"><a href="#6、单例模式" class="headerlink" title="6、单例模式"></a>6、单例模式</h2><p>​    分为懒汉式和饿汉式，懒汉式就是在要用的时候再初始化，需要加锁。</p>
-<p>​    还有静态内部类实现单例，这种方法是因为类加载时不会立即加载内部类，在用到时才会加载，并且也保证了线程安全。</p>
-<h2 id="7、适配器模式"><a href="#7、适配器模式" class="headerlink" title="7、适配器模式"></a>7、适配器模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E9%80%82%E9%85%8D%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="适配器模式">
-
-<h2 id="8、桥接模式"><a href="#8、桥接模式" class="headerlink" title="8、桥接模式"></a>8、桥接模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A1%A5%E6%8E%A5%E6%A8%A1%E5%BC%8F.png" class title="桥接模式">
-
-<p>适配器模式是为了合并，桥接模式是为了分离。</p>
-<h2 id="9、装饰器模式"><a href="#9、装饰器模式" class="headerlink" title="9、装饰器模式"></a>9、装饰器模式</h2><p>动态地给一个对象增加一些额外的职责，为的是功能增强。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A3%85%E9%A5%B0%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="装饰器模式">
-
-<h2 id="10、代理模式"><a href="#10、代理模式" class="headerlink" title="10、代理模式"></a>10、代理模式</h2><p>一个类代表另一个类的功能。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F.png" class title="代理模式">
-
-<h2 id="11、组合模式"><a href="#11、组合模式" class="headerlink" title="11、组合模式"></a>11、组合模式</h2><p>把一组相似的对象当作一个单一的对象，为的是减少数据类型。</p>
-
-
-<h2 id="12、外观模式"><a href="#12、外观模式" class="headerlink" title="12、外观模式"></a>12、外观模式</h2><p>糅合功能，对外只提供一个入口。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%A4%96%E8%A7%82%E6%A8%A1%E5%BC%8F.png" class title="外观模式">
-
-<h2 id="13、模板方法模式"><a href="#13、模板方法模式" class="headerlink" title="13、模板方法模式"></a>13、模板方法模式</h2><p>在父类中编排主流程，将步骤实现延迟到子类去实现。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="模板方法模式">
-
-<h2 id="14、策略模式"><a href="#14、策略模式" class="headerlink" title="14、策略模式"></a>14、策略模式</h2><p>通过选择策略类，来执行不同算法分支。核心是通过注入对象，改变行为。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F.png" class title="策略模式">
-
-<h2 id="15、责任链模式"><a href="#15、责任链模式" class="headerlink" title="15、责任链模式"></a>15、责任链模式</h2><p>将请求传给一个接收者链，由链将请求流转给目标对象。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F.png" class title="责任链模式">
-
-<h2 id="16、观察者模式"><a href="#16、观察者模式" class="headerlink" title="16、观察者模式"></a>16、观察者模式</h2><p>一个对象状态改变时通知其他对象。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="观察者模式">
-
-<h2 id="17、命令模式"><a href="#17、命令模式" class="headerlink" title="17、命令模式"></a>17、命令模式</h2><p>通过增加Command抽象命令类，将不符合抽象编程的handler 调用，转为抽象编程。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%91%BD%E4%BB%A4%E6%A8%A1%E5%BC%8F.png" class title="命令模式">
-
-<h2 id="18、访问者模式"><a href="#18、访问者模式" class="headerlink" title="18、访问者模式"></a>18、访问者模式</h2><p>利用双重分派机制，弥补java多态中的方法重载是静态化的不足。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%AE%BF%E9%97%AE%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="访问者模式">]]></content>
-  </entry>
-  <entry>
     <title>自定义View</title>
     <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
     <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
@@ -2312,6 +2008,316 @@
 <h2 id="1-7-ViewPager的wrap-content失效分析"><a href="#1-7-ViewPager的wrap-content失效分析" class="headerlink" title="1.7 ViewPager的wrap_content失效分析"></a>1.7 ViewPager的wrap_content失效分析</h2><h3 id="1-7-1-原因"><a href="#1-7-1-原因" class="headerlink" title="1.7.1 原因"></a>1.7.1 原因</h3><p>先度量了自己，并且设置为满屏。</p>
 <h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
 <h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
+]]></content>
+  </entry>
+  <entry>
+    <title>设计模式</title>
+    <url>/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/</url>
+    <content><![CDATA[<h1 id="一、设计模式六大原则"><a href="#一、设计模式六大原则" class="headerlink" title="一、设计模式六大原则"></a>一、设计模式六大原则</h1><ul>
+<li>单一职责原则：一个类就只负责一个工作</li>
+<li>里氏替换原则：子类可以拓展功能，但是不要替换父类的功能</li>
+<li>依赖倒置原则：面向接口编程</li>
+<li>迪米特法则：耦合度降低，不能在方法中新增没有的类</li>
+<li>开闭原则：对扩展开放，对修改关闭，即新增功能时最好不要修改原有代码</li>
+<li>接口隔离原则：接口功能要最小单元化</li>
+</ul>
+<h1 id="二、设计模式"><a href="#二、设计模式" class="headerlink" title="二、设计模式"></a>二、设计模式</h1><h2 id="1、简单工厂模式"><a href="#1、简单工厂模式" class="headerlink" title="1、简单工厂模式"></a>1、简单工厂模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AE%80%E5%8D%95%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="简单工厂模式">
+
+<h2 id="2、工厂方法模式"><a href="#2、工厂方法模式" class="headerlink" title="2、工厂方法模式"></a>2、工厂方法模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%B7%A5%E5%8E%82%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="工厂方法模式">
+
+<p>​    当水果数量越来越多时，简单工厂模式会越来越复杂，违背了单一职责原则、开闭原则，所以需要把每个水果单一创建一个工厂。</p>
+<h2 id="3、抽象工厂模式"><a href="#3、抽象工厂模式" class="headerlink" title="3、抽象工厂模式"></a>3、抽象工厂模式</h2><p>​    工厂方法模式有一个缺点，就是当新加入了一个工厂后，同一个对象可能会调用出现错误，为了避免这种错误，可以使用抽象工厂模式。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%8A%BD%E8%B1%A1%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="抽象工厂模式">
+
+<h2 id="4、建造者模式"><a href="#4、建造者模式" class="headerlink" title="4、建造者模式"></a>4、建造者模式</h2><p>​    建造者模式实际上也是工厂模式的一种，Builder就是一个工厂，它和工厂模式的不同之处就在于它是有一个模板的，所有事情都会按照这个模板来进行。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%BB%BA%E9%80%A0%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="建造者模式">
+
+<h2 id="5、工厂模式总结"><a href="#5、工厂模式总结" class="headerlink" title="5、工厂模式总结"></a>5、工厂模式总结</h2><ul>
+<li>原则<ul>
+<li>解耦：把对象的创建和使用的过程分开</li>
+<li>工厂负责对象的创建，包括其init方法的调用，黑盒创建过程</li>
+<li>面向接口编程： 使用者只管使用，只知其接口而不知其实现类</li>
+</ul>
+</li>
+<li>对比<ul>
+<li>静态工厂：把所有对象的创建逻辑集中到一个（专业）类里处理</li>
+<li>工厂方法模式：一个工厂负责创建一个产品类的创建</li>
+<li>将一个系列的产品的工厂合并成一个工厂，负责生产这个系列的产品</li>
+<li>对象的创建比较复杂时，按步骤一块块创建，让创建过程模板化</li>
+</ul>
+</li>
+</ul>
+<h2 id="6、单例模式"><a href="#6、单例模式" class="headerlink" title="6、单例模式"></a>6、单例模式</h2><p>​    分为懒汉式和饿汉式，懒汉式就是在要用的时候再初始化，需要加锁。</p>
+<p>​    还有静态内部类实现单例，这种方法是因为类加载时不会立即加载内部类，在用到时才会加载，并且也保证了线程安全。</p>
+<h2 id="7、适配器模式"><a href="#7、适配器模式" class="headerlink" title="7、适配器模式"></a>7、适配器模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E9%80%82%E9%85%8D%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="适配器模式">
+
+<h2 id="8、桥接模式"><a href="#8、桥接模式" class="headerlink" title="8、桥接模式"></a>8、桥接模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A1%A5%E6%8E%A5%E6%A8%A1%E5%BC%8F.png" class title="桥接模式">
+
+<p>适配器模式是为了合并，桥接模式是为了分离。</p>
+<h2 id="9、装饰器模式"><a href="#9、装饰器模式" class="headerlink" title="9、装饰器模式"></a>9、装饰器模式</h2><p>动态地给一个对象增加一些额外的职责，为的是功能增强。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A3%85%E9%A5%B0%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="装饰器模式">
+
+<h2 id="10、代理模式"><a href="#10、代理模式" class="headerlink" title="10、代理模式"></a>10、代理模式</h2><p>一个类代表另一个类的功能。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F.png" class title="代理模式">
+
+<h2 id="11、组合模式"><a href="#11、组合模式" class="headerlink" title="11、组合模式"></a>11、组合模式</h2><p>把一组相似的对象当作一个单一的对象，为的是减少数据类型。</p>
+
+
+<h2 id="12、外观模式"><a href="#12、外观模式" class="headerlink" title="12、外观模式"></a>12、外观模式</h2><p>糅合功能，对外只提供一个入口。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%A4%96%E8%A7%82%E6%A8%A1%E5%BC%8F.png" class title="外观模式">
+
+<h2 id="13、模板方法模式"><a href="#13、模板方法模式" class="headerlink" title="13、模板方法模式"></a>13、模板方法模式</h2><p>在父类中编排主流程，将步骤实现延迟到子类去实现。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="模板方法模式">
+
+<h2 id="14、策略模式"><a href="#14、策略模式" class="headerlink" title="14、策略模式"></a>14、策略模式</h2><p>通过选择策略类，来执行不同算法分支。核心是通过注入对象，改变行为。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F.png" class title="策略模式">
+
+<h2 id="15、责任链模式"><a href="#15、责任链模式" class="headerlink" title="15、责任链模式"></a>15、责任链模式</h2><p>将请求传给一个接收者链，由链将请求流转给目标对象。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F.png" class title="责任链模式">
+
+<h2 id="16、观察者模式"><a href="#16、观察者模式" class="headerlink" title="16、观察者模式"></a>16、观察者模式</h2><p>一个对象状态改变时通知其他对象。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="观察者模式">
+
+<h2 id="17、命令模式"><a href="#17、命令模式" class="headerlink" title="17、命令模式"></a>17、命令模式</h2><p>通过增加Command抽象命令类，将不符合抽象编程的handler 调用，转为抽象编程。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%91%BD%E4%BB%A4%E6%A8%A1%E5%BC%8F.png" class title="命令模式">
+
+<h2 id="18、访问者模式"><a href="#18、访问者模式" class="headerlink" title="18、访问者模式"></a>18、访问者模式</h2><p>利用双重分派机制，弥补java多态中的方法重载是静态化的不足。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%AE%BF%E9%97%AE%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="访问者模式">]]></content>
+  </entry>
+  <entry>
+    <title>网络框架</title>
+    <url>/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/</url>
+    <content><![CDATA[<h1 id="一、网络基础"><a href="#一、网络基础" class="headerlink" title="一、网络基础"></a>一、网络基础</h1><h2 id="1-计算机网络分层"><a href="#1-计算机网络分层" class="headerlink" title="1. 计算机网络分层"></a>1. 计算机网络分层</h2><img src="/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/tcpip.jpg" class title="tcpip">
+
+<p><strong>OSI七层网络模型(从下往上)</strong>：</p>
+<blockquote>
+<ul>
+<li><strong>物理层(Physical)</strong>：设备之间的数据通信提供传输媒体及互连设备，为数据传输提供可靠的 环境。可以理解为网络传输的物理媒体部分，比如<strong>网卡，网线，集线器，中继器，调制解调器</strong>等！ 在这一层，数据还没有被组织，仅作为原始的位流或电气电压处理，这一层的单位是:<strong>bit比特</strong></li>
+<li><strong>数据链路层(Datalink)</strong>：可以理解为数据通道，主要功能是如何在不可靠的物理线路上进行 数据的可靠传递，改层作用包括：物理地址寻址，数据的成帧，流量控制，数据检错以及重发等！ 另外这个<strong>数据链路指的是</strong>：物理层要为终端设备间的数据通信提供传输媒体及其连接。媒体是 长期的，连接是有生存期的。在连接生存期内，收发两端可以进行不等的一次或多次数据通信。 每次通信都要经过建立通信联络和拆除通信联络两过程！这种建立起来的<strong>数据收发关系</strong>~ 该层的设备有：<strong>网卡，网桥，网路交换机</strong>，另外该层的单位为：<strong>帧</strong></li>
+<li><strong>网络层(Network)</strong>：主要功能是将网络地址翻译成对应的物理地址，并决定如何将数据从发 送方路由到接收方，所谓的路由与寻径：一台终端可能需要与多台终端通信，这样就产生的了 把任意两台终端设备数据链接起来的问题！简单点说就是：建立网络连接和为上层提供服务！ 该层的设备有：<strong>路由</strong>！该层的单位为：<strong>数据包</strong>，另外IP协议就在这一层！</li>
+<li><strong>传输层(Transport)</strong>：向上面的应用层提供通信服务，面向通信部分的最高层，同时也是 用户功能中的最低层。接收会话层数据，在必要时将数据进行分割，并将这些数据交给网络 层，并且保证这些数据段有效的到达对端！所以这层的单位是：<strong>数据段</strong>；而这层有两个很重要 的协议就是：<strong>TCP传输控制协议</strong>与<strong>UDP用户数据报协议</strong>，这也是本章节核心讲解的部分！</li>
+<li><strong>会话层(Session)</strong>：负责在网络中的两节点之间建立、维持和终止通信。建立通信链接， 保持会话过程通信链接的畅通，同步两个节点之间的对话，决定通信是否被中断以及通信中断时 决定从何处重新发送，即不同机器上的用户之间会话的建立及管理！</li>
+<li><strong>表示层(Presentation)</strong>：对来自应用层的命令和数据进行解释，对各种语法赋予相应 的含义，并按照一定的格式传送给会话层。其主要功能是”处理用户信息的表示问题，如编码、 数据格式转换和加密解密，压缩解压缩”等</li>
+<li><strong>应用层(Application)</strong>：OSI参考模型的最高层，为用户的应用程序提供网络服务。 它在其他6层工作的基础上，负责完成网络中应用程序与网络操作系统之间的联系，建立与结束使用者之间的联系，并完成网络用户提出的各种网络服务及应用所需的监督、管理和服务等各种协议。此外，该层还负责协调各个应用程序间的工作。应用层为用户提供的服务和协议有：文件服务、目录服务、文件传输服务（FTP）、远程登录服务（Telnet）、电子邮件服务（E-mail）、打印服务、安全服务、网络管理服务、数据库服务等。</li>
+</ul>
+</blockquote>
+<blockquote>
+<p>TCP/IP是一组协议的代名词，它还包括许多协议，组成了TCP/IP协议簇。 TCP/IP协议簇分为四层，IP位于协议簇的第二层(对应OSI的第三层)，TCP位于协议簇的第三层 (对应OSI的第四层)。TCP/IP通讯协议采用了4层的层级结构，每一层都呼叫它的下一层所提供 的网络来完成自己的需求。这4层分别为：</p>
+<ul>
+<li><strong>应用层</strong>：应用程序间沟通的层，如简单电子邮件传输（SMTP）、文件传输协议（FTP）、 网络远程访问协议（Telnet）等。</li>
+<li><strong>传输层</strong>：在此层中，它提供了节点间的数据传送服务，如传输控制协议（TCP）、 用户数据报协议（UDP）等，TCP和UDP给数据包加入传输数据并把它传输到下一层中， 这一层负责传送数据，并且确定数据已被送达并接收。</li>
+<li><strong>网络互连层</strong>：负责提供基本的数据封包传送功能，让每一块数据包都能够到达目 的主机（但不检查是否被正确接收），如网际协议（IP）。</li>
+<li><strong>主机到网络层</strong>：对实际的网络媒体的管理，定义如何使用实际网络 （如Ethernet、Serial Line等）来传送数据。</li>
+</ul>
+</blockquote>
+<h2 id="2-IP地址-amp-端口号"><a href="#2-IP地址-amp-端口号" class="headerlink" title="2. IP地址&amp;端口号"></a>2. IP地址&amp;端口号</h2><h3 id="2-1-IP地址"><a href="#2-1-IP地址" class="headerlink" title="2.1 IP地址"></a>2.1 IP地址</h3><img src="/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/ip.jpg" class title="ip">
+
+<h3 id="2-2-端口号"><a href="#2-2-端口号" class="headerlink" title="2.2 端口号"></a>2.2 端口号</h3><img src="/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/ip&port.jpg" class title="ip&amp;port">
+
+<p>端口号规定为16位，即允许一个IP主机有2的16次方65535个不同的端口。其中：</p>
+<ul>
+<li><p>0~1023：分配给系统的端口号</p>
+<blockquote>
+<p>我们不可以乱用<br>常用协议使用的端口：HTTP:80，FTP：21，TELNET：23</p>
+</blockquote>
+</li>
+<li><p>1024~49151：登记端口号，主要是让第三方应用使用</p>
+<blockquote>
+<p>但是必须在IANA（互联网数字分配机构）按照规定手续登记，</p>
+</blockquote>
+</li>
+<li><p>49152~65535：短暂端口号，是留给客户进程选择暂时使用，一个进程使用完就可以供其他进程使用。</p>
+</li>
+</ul>
+<blockquote>
+<p>在Socket使用时，可以用1024~65535的端口号</p>
+</blockquote>
+<h3 id="2-3-C-S结构"><a href="#2-3-C-S结构" class="headerlink" title="2.3 C/S结构"></a>2.3 C/S结构</h3><ul>
+<li><p>定义：即客户端/服务器结构，是软件系统体系结构</p>
+</li>
+<li><p>作用：充分利用两端硬件环境的优势，将任务合理分配到Client端和Server端来实现，降低了系统的通讯开销。</p>
+<blockquote>
+<p>Socket正是使用这种结构建立连接的，一个套接字接客户端，一个套接字接服务器。</p>
+</blockquote>
+</li>
+</ul>
+<p>如图：</p>
+<img src="/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/c&s.png" class title="c&amp;s">
+
+<p>可以看出，Socket的使用可以基于TCP或者UDP协议。</p>
+<h2 id="3-TCP-amp-UDP"><a href="#3-TCP-amp-UDP" class="headerlink" title="3. TCP&amp;UDP"></a>3. TCP&amp;UDP</h2><h3 id="3-1-TCP"><a href="#3-1-TCP" class="headerlink" title="3.1 TCP"></a>3.1 TCP</h3><ul>
+<li><p>定义：Transmission Control Protocol，即传输控制协议，是一种传输层通信协议</p>
+<blockquote>
+<p>基于TCP的应用层协议有FTP、Telnet、SMTP、HTTP、POP3与DNS。</p>
+</blockquote>
+</li>
+<li><p>特点：面向连接、面向字节流、全双工通信、可靠</p>
+<ul>
+<li><strong>面向连接</strong>：指的是要使用TCP传输数据，必须先建立TCP连接，传输完成后释放连接，就像打电话一样必须先拨号建立一条连接，打完后挂机释放连接。</li>
+<li><strong>全双工通信</strong>：即一旦建立了TCP连接，通信双方可以在任何时候都能发送数据。</li>
+<li><strong>可靠的</strong>：指的是通过TCP连接传送的数据，无差错，不丢失，不重复，并且按序到达。</li>
+<li><strong>面向字节流</strong>：流，指的是流入到进程或从进程流出的字符序列。简单来说，虽然有时候要传输的数据流太大，TCP报文长度有限制，不能一次传输完，要把它分为好几个数据块，但是由于可靠性保证，接收方可以按顺序接收数据块然后重新组成分块之前的数据流，所以TCP看起来就像直接互相传输字节流一样，面向字节流。</li>
+</ul>
+</li>
+<li><p>TCP建立连接<br>必须进行<strong>三次握手</strong>：若A要与B进行连接，则必须 </p>
+<ul>
+<li>第一次握手：建立连接。客户端发送连接请求报文段，将SYN位置为1，Sequence Number为x；然后，客户端进入SYN_SEND状态，等待服务器的确认。即A发送信息给B</li>
+<li>第二次握手：服务器收到客户端的SYN报文段，需要对这个SYN报文段进行确认。即B收到连接信息后向A返回确认信息</li>
+<li>第三次握手：客户端收到服务器的（SYN+ACK）报文段，并向服务器发送ACK报文段。即A收到确认信息后再次向B返回确认连接信息 </li>
+</ul>
+<blockquote>
+<p>此时，A告诉自己上层连接建立；B收到连接信息后告诉上层连接建立。</p>
+</blockquote>
+</li>
+</ul>
+<img src="/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/3ciwoshou.png" class title="3ciwoshou">
+
+<p>这样就完成TCP三次握手 = 一条TCP连接建立完成 = 可以开始发送数据</p>
+<blockquote>
+<ol>
+<li>三次握手期间任何一次未收到对面回复都要重发。</li>
+<li>最后一个确认报文段发送完毕以后，客户端和服务器端都进入ESTABLISHED状态。</li>
+</ol>
+</blockquote>
+<h4 id="为什么TCP建立连接需要三次握手？"><a href="#为什么TCP建立连接需要三次握手？" class="headerlink" title="为什么TCP建立连接需要三次握手？"></a>为什么TCP建立连接需要三次握手？</h4><p>答：防止服务器端因为接收了<strong>早已失效的连接请求报文</strong>从而一直等待客户端请求，从而浪费资源</p>
+<blockquote>
+<ul>
+<li>“已失效的连接请求报文段”的产生在这样一种情况下：Client发出的第一个连接请求报文段并没有丢失，而是在某个网络结点长时间的滞留了，以致延误到连接释放以后的某个时间才到达server。</li>
+<li>这是一个早已失效的报文段。但Server收到此失效的连接请求报文段后，就误认为是Client再次发出的一个新的连接请求。</li>
+<li>于是就向Client发出确认报文段，同意建立连接。</li>
+<li>假设不采用“三次握手”：只要Server发出确认，新的连接就建立了。</li>
+<li>由于现在Client并没有发出建立连接的请求，因此不会向Server发送数据。</li>
+<li>但Server却以为新的运输连接已经建立，并一直等待Client发来数据。&gt;- 这样，Server的资源就白白浪费掉了。</li>
+</ul>
+</blockquote>
+<p><strong>以上答案只是表象，没有说到本质上去</strong></p>
+<blockquote>
+<p>那么本质是 因为tcp是全双工，为保证传输的可靠性，需要给每次传输的数据段添加序号，那么初始的序列号就是tcp三次握手真正的意义所在，而为了确保交换双方的初始序号，最少需要三次才行</p>
+</blockquote>
+<p>采用“三次握手”的办法可以防止上述现象发生：</p>
+<ul>
+<li><p>Client不会向Server的确认发出确认</p>
+</li>
+<li><p>Server由于收不到确认，就知道Client并没有要求建立连接</p>
+</li>
+<li><p>所以Server不会等待Client发送数据，资源就没有被浪费</p>
+</li>
+<li><p>TCP释放连接<br>TCP释放连接需要<strong>四次挥手</strong>过程，现在假设A主动释放连接：（数据传输结束后，通信的双方都可释放连接）</p>
+<ul>
+<li><p>第一次挥手：A发送释放信息到B；（发出去之后，A-&gt;B发送数据这条路径就断了）</p>
+</li>
+<li><p>第二次挥手：B收到A的释放信息之后，回复确认释放的信息：我同意你的释放连接请求</p>
+</li>
+<li><p>第三次挥手：B发送“请求释放连接“信息给A</p>
+</li>
+<li><p>第四次挥手：A收到B发送的信息后向B发送确认释放信息：我同意你的释放连接请求</p>
+<blockquote>
+<p>B收到确认信息后就会正式关闭连接； A等待2MSL后依然没有收到回复，则证明B端已正常关闭，于是A关闭连接</p>
+</blockquote>
+</li>
+</ul>
+</li>
+</ul>
+
+
+<h4 id="为什么TCP释放连接需要四次挥手？"><a href="#为什么TCP释放连接需要四次挥手？" class="headerlink" title="为什么TCP释放连接需要四次挥手？"></a>为什么TCP释放连接需要四次挥手？</h4><p>为了保证双方都能通知对方“需要释放连接”，即在释放连接后都无法接收或发送消息给对方</p>
+<ul>
+<li><p>需要明确的是：TCP是全双工模式，这意味着是双向都可以发送、接收的</p>
+</li>
+<li><p>释放连接的定义是：双方都无法接收或发送消息给对方，是双向的</p>
+</li>
+<li><p>当主机1发出“释放连接请求”（FIN报文段）时，只是表示主机1已经没有数据要发送 / 数据已经全部发送完毕；</p>
+<blockquote>
+<p>但是，这个时候主机1还是可以接受来自主机2的数据。</p>
+</blockquote>
+</li>
+<li><p>当主机2返回“确认释放连接”信息（ACK报文段）时，表示它已经知道主机1没有数据发送了<br>但此时主机2还是可以发送数据给主机1</p>
+</li>
+<li><p>当主机2也发送了FIN报文段时，即告诉主机1我也没有数据要发送了<br>此时，主机1和2已经无法进行通信：主机1无法发送数据给主机2，主机2也无法发送数据给主机1，此时，TCP的连接才算释放</p>
+</li>
+</ul>
+<h4 id="三次握手-amp-四次挥手面试题总结"><a href="#三次握手-amp-四次挥手面试题总结" class="headerlink" title="三次握手&amp;四次挥手面试题总结"></a>三次握手&amp;四次挥手面试题总结</h4><ol>
+<li><p>三次握手是什么或者流程？四次握手呢？答案前面分析就是。</p>
+</li>
+<li><p>为什么建立连接是三次握手，而关闭连接却是四次挥手呢？</p>
+<blockquote>
+<p>这是因为服务端在LISTEN状态下，收到建立连接请求的SYN报文后，把ACK和SYN放在一个报文里发送给客户端。而关闭连接时，当收到对方的FIN报文时，仅仅表示对方不再发送数据了但是还能接收数据，己方也未必全部数据都发送给对方了，所以己方可以立即close，也可以发送一些数据给对方后，再发送FIN报文给对方来表示同意现在关闭连接，因此，己方ACK和FIN一般都会分开发送。</p>
+</blockquote>
+</li>
+</ol>
+<h3 id="3-2-UPD"><a href="#3-2-UPD" class="headerlink" title="3.2 UPD"></a>3.2 UPD</h3><ul>
+<li><p>定义：User Datagram Protocol，即用户数据报协议，是一种传输层通信协议。</p>
+<blockquote>
+<p>基于UDP的应用层协议有TFTP、SNMP与DNS。</p>
+</blockquote>
+</li>
+<li><p>特点：无连接的、不可靠的、面向报文、没有拥塞控制</p>
+<ul>
+<li><strong>无连接的</strong>：和TCP要建立连接不同，UDP传输数据不需要建立连接，就像写信，在信封写上收信人名称、地址就可以交给邮局发送了，至于能不能送到，就要看邮局的送信能力和送信过程的困难程度了。</li>
+<li><strong>不可靠的</strong>：因为UDP发出去的数据包发出去就不管了，不管它会不会到达，所以很可能会出现丢包现象，使传输的数据出错。</li>
+<li><strong>面向报文</strong>：数据报文，就相当于一个数据包，应用层交给UDP多大的数据包，UDP就照样发送，不会像TCP那样拆分。</li>
+<li><strong>没有拥塞控制</strong>：拥塞，是指到达通信子网中某一部分的分组数量过多，使得该部分网络来不及处理，以致引起这部分乃至整个网络性能下降的现象，严重时甚至会导致网络通信业务陷入停顿，即出现死锁现象，就像交通堵塞一样。TCP建立连接后如果发送的数据因为信道质量的原因不能到达目的地，它会不断重发，有可能导致越来越塞，所以需要一个复杂的原理来控制拥塞。而UDP就没有这个烦恼，发出去就不管了。</li>
+</ul>
+</li>
+<li><p>应用场景 很多的实时应用（如IP电话、实时视频会议、某些多人同时在线游戏等）要求源主机以很定的速率发送数据，并且允许在网络发生拥塞时候丢失一些数据，但是要求不能有太大的延时，UDP就刚好适合这种要求。</p>
+</li>
+</ul>
+<h2 id="4-Java中对于网络提供的几个关键类"><a href="#4-Java中对于网络提供的几个关键类" class="headerlink" title="4. Java中对于网络提供的几个关键类"></a>4. Java中对于网络提供的几个关键类</h2><p>针对不同的网络通信层次，Java给我们提供的网络功能有四大类：</p>
+<ul>
+<li>InetAddress： 用于标识网络上的硬件资源</li>
+<li>URL： 统一资源定位符，通过URL可以直接读取或者写入网络上的数据</li>
+<li>Socket和ServerSocket： 使用TCP协议实现网络通信的Socket相关的类</li>
+<li>Datagram： 使用UDP协议，将数据保存在数据报中，通过网络进行通信</li>
+</ul>
+<h2 id="5-Socket"><a href="#5-Socket" class="headerlink" title="5. Socket"></a>5. Socket</h2><h3 id="什么是Socket？"><a href="#什么是Socket？" class="headerlink" title="什么是Socket？"></a>什么是Socket？</h3><ul>
+<li><p>即套接字，<strong>是一个对 TCP / IP协议进行封装 的编程调用接口（API）</strong><br>用來描述IP地址和端口，是通信链的句柄，应用程序可以通过Socket向网络发送请求或者<br>应答网络请求！Socket是支持TCP/IP协议的网络通信的基本操作单元，是对网络通信过程<br>中端点的抽象表示，包含了进行网络通信所必须的五种信息</p>
+<ol>
+<li>连接所使用的的协议</li>
+<li>本地主机的IP地址</li>
+<li>本地远程的协议端口</li>
+<li>远程主机的IP地址</li>
+<li>远地进程的协议端口</li>
+</ol>
+<blockquote>
+<ol>
+<li>即通过<code>Socket</code>，我们才能在Andorid平台上通过 <code>TCP/IP</code>协议进行开发</li>
+<li><code>Socket</code>不是一种协议，而是一个编程调用接口（<code>API</code>），属于传输层（主要解决数据如何在网络中传输）</li>
+<li>成对出现，一对套接字</li>
+</ol>
+</blockquote>
+</li>
+</ul>
+<h3 id="Socket通信模型"><a href="#Socket通信模型" class="headerlink" title="Socket通信模型"></a>Socket通信模型</h3><img src="/2020/11/20/%E7%BD%91%E7%BB%9C%E6%A1%86%E6%9E%B6/socket_cs.jpg" class title="socket_cs">
+
+<h3 id="Socket通信步骤"><a href="#Socket通信步骤" class="headerlink" title="Socket通信步骤"></a>Socket通信步骤</h3><ul>
+<li>Step 1：创建ServerSocket和Socket</li>
+<li>Step 2：打开连接到的Socket的输入/输出流</li>
+<li>Step 3：按照协议对Socket进行读/写操作</li>
+<li>Step 4：关闭输入输出流，以及Socket</li>
+</ul>
+<h4 id="Socket服务端的编写"><a href="#Socket服务端的编写" class="headerlink" title="Socket服务端的编写"></a>Socket服务端的编写</h4><ul>
+<li>Step 1：创建ServerSocket对象，绑定监听的端口</li>
+<li>Step 2：调用accept()方法监听客户端的请求</li>
+<li>Step 3：连接建立后，通过输入流读取客户端发送的请求信息</li>
+<li>Step 4：通过输出流向客户端发送响应信息</li>
+<li>Step 5：关闭相关资源</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String[] args)</span> <span class="keyword">throws</span> IOException </span>&#123;</span><br><span class="line">       <span class="comment">//1.创建一个服务器端Socket，即ServerSocket，指定绑定的端口，并监听此端口</span></span><br><span class="line">       ServerSocket serverSocket = <span class="keyword">new</span> ServerSocket(<span class="number">12345</span>);</span><br><span class="line">       InetAddress address = InetAddress.getLocalHost();</span><br><span class="line">       String ip = address.getHostAddress();</span><br><span class="line">       Socket socket = <span class="keyword">null</span>;</span><br><span class="line">       <span class="comment">//2.调用accept()等待客户端连接</span></span><br><span class="line">       System.out.println(<span class="string">"~~~服务端已就绪，等待客户端接入~，服务端ip地址: "</span> + ip);</span><br><span class="line">       socket = serverSocket.accept();</span><br><span class="line">       <span class="comment">//3.连接后获取输入流，读取客户端信息</span></span><br><span class="line">       InputStream is=<span class="keyword">null</span>;</span><br><span class="line">       InputStreamReader isr=<span class="keyword">null</span>;</span><br><span class="line">       BufferedReader br=<span class="keyword">null</span>;</span><br><span class="line">       OutputStream os=<span class="keyword">null</span>;</span><br><span class="line">       PrintWriter pw=<span class="keyword">null</span>;</span><br><span class="line">       is = socket.getInputStream();     <span class="comment">//获取输入流</span></span><br><span class="line">       isr = <span class="keyword">new</span> InputStreamReader(is,<span class="string">"UTF-8"</span>);</span><br><span class="line">       br = <span class="keyword">new</span> BufferedReader(isr);</span><br><span class="line">       String info = <span class="keyword">null</span>;</span><br><span class="line">       <span class="keyword">while</span>((info=br.readLine())!=<span class="keyword">null</span>)&#123;<span class="comment">//循环读取客户端的信息</span></span><br><span class="line">           System.out.println(<span class="string">"客户端发送过来的信息"</span> + info);</span><br><span class="line">       &#125;</span><br><span class="line">       socket.shutdownInput();<span class="comment">//关闭输入流</span></span><br><span class="line">       socket.close();</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Socket客户端的编写"><a href="#Socket客户端的编写" class="headerlink" title="Socket客户端的编写"></a>Socket客户端的编写</h4><ul>
+<li>Step 1：创建Socket对象，指明需要链接的服务器的地址和端号</li>
+<li>Step 2：链接建立后，通过输出流向服务器发送请求信息</li>
+<li>Step 3：通过输出流获取服务器响应的信息</li>
+<li>Step 4：关闭相关资源</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">main</span><span class="params">(String ... args)</span> <span class="keyword">throws</span> Exception</span>&#123;</span><br><span class="line">        <span class="comment">//1.创建客户端Socket，指定服务器地址和端口</span></span><br><span class="line">        Socket socket = <span class="keyword">new</span> Socket(<span class="string">"127.0.0.1"</span>, <span class="number">12345</span>);</span><br><span class="line">        <span class="comment">//2.获取输出流，向服务器端发送信息</span></span><br><span class="line">        OutputStream os = socket.getOutputStream();<span class="comment">//字节输出流</span></span><br><span class="line">        PrintWriter pw = <span class="keyword">new</span> PrintWriter(os);<span class="comment">//将输出流包装为打印流</span></span><br><span class="line">        <span class="comment">//获取客户端的IP地址</span></span><br><span class="line">        InetAddress address = InetAddress.getLocalHost();</span><br><span class="line">        String ip = address.getHostAddress();</span><br><span class="line">        pw.write(<span class="string">"客户端：~"</span> + ip + <span class="string">"~ 接入服务器！！"</span>);</span><br><span class="line">        pw.flush();</span><br><span class="line">        socket.shutdownOutput();<span class="comment">//关闭输出流</span></span><br><span class="line">        socket.close();</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+
+
+
+
 ]]></content>
   </entry>
 </search>
