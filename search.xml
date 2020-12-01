@@ -404,114 +404,6 @@
 ]]></content>
   </entry>
   <entry>
-    <title>RecyclerView回收复用机制</title>
-    <url>/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/</url>
-    <content><![CDATA[<h1 id="一、复用"><a href="#一、复用" class="headerlink" title="一、复用"></a>一、复用</h1><h2 id="1、滑动时的复用入口"><a href="#1、滑动时的复用入口" class="headerlink" title="1、滑动时的复用入口"></a>1、滑动时的复用入口</h2><h3 id="1-1-获取缓存并复用的流程"><a href="#1-1-获取缓存并复用的流程" class="headerlink" title="1.1 获取缓存并复用的流程"></a>1.1 获取缓存并复用的流程</h3><ul>
-<li><p>onTouchEvent </p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">    <span class="keyword">if</span> (scrollByInternal(</span><br><span class="line">                            canScrollHorizontally ? dx : <span class="number">0</span>,</span><br><span class="line">                            canScrollVertically ? dy : <span class="number">0</span>,</span><br><span class="line">                            vtev)) &#123;</span><br><span class="line">                        getParent().requestDisallowInterceptTouchEvent(<span class="keyword">true</span>);</span><br><span class="line">                    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>scrollByInternal</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (x != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedX = mLayout.scrollHorizontallyBy(x, mRecycler, mState);</span><br><span class="line">              unconsumedX = x - consumedX;</span><br><span class="line">          &#125;</span><br><span class="line">          <span class="keyword">if</span> (y != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedY = mLayout.scrollVerticallyBy(y, mRecycler, mState);</span><br><span class="line">              unconsumedY = y - consumedY;</span><br><span class="line">          &#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>scrollVerticallyBy</p>
-<p>直接看LinearLayoutManager里面重写的方法。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mOrientation == HORIZONTAL) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> scrollBy(dy, recycler, state);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>scrollBy</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">int</span> consumed = mLayoutState.mScrollingOffset</span><br><span class="line">                + fill(recycler, mLayoutState, state, <span class="keyword">false</span>);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>fill</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">layoutChunk(recycler, state, layoutState, layoutChunkResult);</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>layoutChunk</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">View view = layoutState.next(recycler);</span><br><span class="line">addView(view);</span><br></pre></td></tr></table></figure>
-
-<p>在这里获取到缓存的view并addView添加，完成复用。</p>
-</li>
-</ul>
-<h3 id="1-2-RecyclerView缓存机制"><a href="#1-2-RecyclerView缓存机制" class="headerlink" title="1.2 RecyclerView缓存机制"></a>1.2 RecyclerView缓存机制</h3><p>采用四级缓存：（目的是为了提高性能，具体体现在mCacheViews和RecyclerViewPool）</p>
-<ul>
-<li>mChangeScrap与 mAttachedScrap (用来缓存还在屏幕内的 ViewHolder )</li>
-<li>mCachedViews (用来缓存移除屏幕之外的 ViewHolder )</li>
-<li>mViewCacheExtension (开发给用户的自定义扩展缓存，需要用户自己管理 View 的创建和缓存 )</li>
-<li>RecycledViewPool (ViewHolder 缓存池)</li>
-</ul>
-<h3 id="1-3-复用如何调用缓存"><a href="#1-3-复用如何调用缓存" class="headerlink" title="1.3 复用如何调用缓存"></a>1.3 复用如何调用缓存</h3><ul>
-<li><p>进入next方法看看</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">next</span><span class="params">(RecyclerView.Recycler recycler)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (mScrapList != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> nextViewFromScrapList();</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">final</span> View view = recycler.getViewForPosition(mCurrentPosition);</span><br><span class="line">            mCurrentPosition += mItemDirection;</span><br><span class="line">            <span class="keyword">return</span> view;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>getViewForPosition</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">getViewForPosition</span><span class="params">(<span class="keyword">int</span> position, <span class="keyword">boolean</span> dryRun)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> tryGetViewHolderForPositionByDeadline(position, dryRun, FOREVER_NS).itemView;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-</li>
-<li><p>tryGetViewHolderForPositionByDeadline</p>
-<p>分几种情况去获取ViewHolder</p>
-<ul>
-<li>getChangedScrapViewForPosition – mChangeScrap 与动画相关</li>
-<li>getScrapOrHiddenOrCachedHolderForPosition  – mAttachedScrap 、mCachedViews </li>
-<li>getScrapOrCachedViewForId  – mAttachedScrap 、mCachedViews </li>
-<li>mViewCacheExtension.getViewForPositionAndType – 自定义缓存 </li>
-<li>getRecycledViewPool().getRecycledView – 从缓冲池里面获取</li>
-</ul>
-<p>总体流程：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">ViewHolder <span class="title">tryGetViewHolderForPositionByDeadline</span><span class="params">(<span class="keyword">int</span> position,</span></span></span><br><span class="line"><span class="function"><span class="params">               <span class="keyword">boolean</span> dryRun, <span class="keyword">long</span> deadlineNs)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//先从mChangedScrap中获取</span></span><br><span class="line">    holder = getChangedScrapViewForPosition(position);</span><br><span class="line">    <span class="comment">//如果没有获取到，再从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">               holder = getScrapOrHiddenOrCachedHolderForPosition(position, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果没有获取到，这里还有一个方法也是从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span>(holder == <span class="keyword">null</span>)&#123;</span><br><span class="line">        holder = getScrapOrCachedViewForId(mAdapter.getItemId(offsetPosition),</span><br><span class="line">                       type, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，而且自定义了缓存，就从自定义缓存中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span> &amp;&amp; mViewCacheExtension != <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="keyword">final</span> View view = mViewCacheExtension</span><br><span class="line">                           .getViewForPositionAndType(<span class="keyword">this</span>, position, type);</span><br><span class="line">         <span class="keyword">if</span> (view != <span class="keyword">null</span>) &#123;</span><br><span class="line">         	holder = getChildViewHolder(view);</span><br><span class="line">         &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，就从缓冲池里获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">        holder = getRecycledViewPool().getRecycledView(type);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果最后都未获取到缓存，就调用方法createViewHolder</span></span><br><span class="line">     <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">         holder = mAdapter.createViewHolder(RecyclerView.<span class="keyword">this</span>, type);</span><br><span class="line">     &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//holder创建后，绑定布局</span></span><br><span class="line">    bound = tryBindViewHolderByDeadline(holder, offsetPosition, position, deadlineNs);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>进入createViewHolder后，通过子类自定义实现的adapter，重写onCreateViewHolder，来创建viewHolder。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> VH <span class="title">createViewHolder</span><span class="params">(ViewGroup parent, <span class="keyword">int</span> viewType)</span> </span>&#123;</span><br><span class="line">           Trace.beginSection(TRACE_CREATE_VIEW_TAG);</span><br><span class="line">           <span class="keyword">final</span> VH holder = onCreateViewHolder(parent, viewType);</span><br><span class="line">           holder.mItemViewType = viewType;</span><br><span class="line">           Trace.endSection();</span><br><span class="line">           <span class="keyword">return</span> holder;</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
-
-<p>绑定布局流程，进入onBindViewHolder</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">mAdapter.bindViewHolder(holder, offsetPosition);</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">bindViewHolder</span><span class="params">(VH holder, <span class="keyword">int</span> position)</span> </span>&#123;</span><br><span class="line">           onBindViewHolder(holder, position, holder.getUnmodifiedPayloads());</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
-
-
-
-</li>
-</ul>
-<h2 id="2、布局时的复用入口"><a href="#2、布局时的复用入口" class="headerlink" title="2、布局时的复用入口"></a>2、布局时的复用入口</h2><ul>
-<li>RecyclerView.OnLayout</li>
-<li>dispatchLayout()</li>
-<li>dispatchLayoutStep2()</li>
-<li>mLayout.onLayoutChildren(mRecycler, mState)</li>
-<li>fill(recycler, mLayoutState, state, false)</li>
-</ul>
-<p>接下来就和之前的步骤相同了。</p>
-<h1 id="二、回收（缓存）"><a href="#二、回收（缓存）" class="headerlink" title="二、回收（缓存）"></a>二、回收（缓存）</h1><h2 id="1、LinearLayoutManager-onLayoutChildren中缓存"><a href="#1、LinearLayoutManager-onLayoutChildren中缓存" class="headerlink" title="1、LinearLayoutManager.onLayoutChildren中缓存"></a>1、LinearLayoutManager.onLayoutChildren中缓存</h2><p>进入ViewHolder中：</p>
-<ul>
-<li>detachAndScrapAttachedViews(recycler)</li>
-<li>scrapOrRecycleView(recycler, i, v)</li>
-<li>recycler.recycleViewHolderInternal(viewHolder) 以及recycler.scrapView(view)两种方式</li>
-</ul>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">scrapOrRecycleView</span><span class="params">(Recycler recycler, <span class="keyword">int</span> index, View view)</span> </span>&#123;</span><br><span class="line">           <span class="keyword">if</span> (viewHolder.isInvalid() &amp;&amp; !viewHolder.isRemoved()</span><br><span class="line">                   &amp;&amp; !mRecyclerView.mAdapter.hasStableIds()) &#123;</span><br><span class="line">               recycler.recycleViewHolderInternal(viewHolder);</span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               recycler.scrapView(view);</span><br><span class="line">           &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-
-
-<h3 id="1-1-recycler-scrapView"><a href="#1-1-recycler-scrapView" class="headerlink" title="1.1 recycler.scrapView"></a>1.1 recycler.scrapView</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">scrapView</span><span class="params">(View view)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span>（。。。）&#123;</span><br><span class="line">        mAttachedScrap.add(holder);</span><br><span class="line">    &#125;<span class="keyword">else</span>&#123;</span><br><span class="line">        mChangedScrap.add(holder);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>在这里只对mAttachedScrap、mChangedScrap进行缓存，直接添加进集合。</p>
-<h3 id="1-2-recycler-recycleViewHolderInternal"><a href="#1-2-recycler-recycleViewHolderInternal" class="headerlink" title="1.2 recycler.recycleViewHolderInternal"></a>1.2 recycler.recycleViewHolderInternal</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">boolean</span> cached = <span class="keyword">false</span>;</span><br><span class="line"><span class="keyword">if</span> (forceRecycle || holder.isRecyclable()) &#123;</span><br><span class="line">    <span class="comment">//这里如果viewHolder发生改变，就不会进入if语句</span></span><br><span class="line">    <span class="keyword">if</span> (mViewCacheMax &gt; <span class="number">0</span> &amp;&amp; !holder.hasAnyOfTheFlags(ViewHolder.FLAG_INVALID</span><br><span class="line">                                | ViewHolder.FLAG_REMOVED</span><br><span class="line">                                | ViewHolder.FLAG_UPDATE</span><br><span class="line">                                | ViewHolder.FLAG_ADAPTER_POSITION_UNKNOWN)) &#123;</span><br><span class="line">        <span class="keyword">int</span> cachedViewSize = mCachedViews.size();</span><br><span class="line">    	<span class="keyword">if</span> (cachedViewSize &gt;= mViewCacheMax &amp;&amp; cachedViewSize &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        	<span class="comment">//mViewCacheMax的值为2</span></span><br><span class="line">        	<span class="comment">//如果mCachedViews大小大于2，就把第一位的viewHolder从mCachedViews里移除，放入缓存池中</span></span><br><span class="line">    		recycleCachedViewAt(<span class="number">0</span>);<span class="comment">//--&gt; 进入方法会调用addViewHolderToRecycledViewPool(viewHolder, true)</span></span><br><span class="line">    		cachedViewSize--;</span><br><span class="line">    	&#125;</span><br><span class="line">        <span class="comment">//往mCachedViews里添加新的viewHolder缓存</span></span><br><span class="line">    	mCachedViews.add(targetCacheIndex, holder);</span><br><span class="line">    	cached = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">	<span class="comment">//相当于如果viewHolder改变，就会把viewHolder直接添加到缓存池中</span></span><br><span class="line">    <span class="keyword">if</span> (!cached) &#123;</span><br><span class="line">    	addViewHolderToRecycledViewPool(holder, <span class="keyword">true</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;<span class="keyword">else</span>&#123;</span><br><span class="line">	 mViewInfoStore.removeViewHolder(holder);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>这个过程可以用下图表示：</p>
-<img src="/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/%E7%BC%93%E5%AD%98.png" class title="缓存">
-
-
-
-<p>缓存池中一个类型的viewHolder最大可以存放五个。</p>
-<p>如果不需要缓存或者缓存池该类型的数组已满，那么就直接把这个viewHolder丢弃，因为缓存池中存放的是viewHolder的类型，不存入也不影响。</p>
-<p>最后在addViewHolderToRecycledViewPool方法中将viewHolder放入缓存池后，把该viewHolder清空。</p>
-<p>addViewHolderToRecycledViewPool - &gt; getRecycledViewPool().putRecycledView(holder) -&gt;  scrap.resetInternal()</p>
-<p>在这个方法中把viewHolder的标记重置，完成清空。</p>
-<p>由此可以看出，在这个方法中，对mCachedViews、RecyclerViewPool进行处理。</p>
-<h2 id="2、LinearLayoutManager-onLayoutChildren的fill中缓存"><a href="#2、LinearLayoutManager-onLayoutChildren的fill中缓存" class="headerlink" title="2、LinearLayoutManager.onLayoutChildren的fill中缓存"></a>2、LinearLayoutManager.onLayoutChildren的fill中缓存</h2><p>会从fill方法中调用 recycler.recycleViewHolderInterna方法，所以在fill这里只会处理mCachedViews和缓存池的缓存。</p>
-<h1 id="三、自定义layoutManager"><a href="#三、自定义layoutManager" class="headerlink" title="三、自定义layoutManager"></a>三、自定义layoutManager</h1><p>调用detachAndScrapAttachedViews(recycler)进行回收复用</p>
-<p>调用recycler.getViewForPosition(i)进行缓存</p>
-]]></content>
-  </entry>
-  <entry>
-    <title>插件化换肤</title>
-    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
-    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
-  </entry>
-  <entry>
     <title>View的创建流程</title>
     <url>/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/</url>
     <content><![CDATA[<h1 id="View的创建流程"><a href="#View的创建流程" class="headerlink" title="View的创建流程"></a>View的创建流程</h1><h2 id="总览"><a href="#总览" class="headerlink" title="总览"></a>总览</h2><img src="/2020/07/24/View%E7%9A%84%E5%88%9B%E5%BB%BA%E6%B5%81%E7%A8%8B/%E5%B8%83%E5%B1%80%E6%B5%81%E7%A8%8B.png" class title="布局流程">
@@ -594,597 +486,386 @@
 ]]></content>
   </entry>
   <entry>
-    <title>注解与动态代理</title>
-    <url>/2020/11/30/%E6%B3%A8%E8%A7%A3%E4%B8%8E%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86/</url>
-    <content><![CDATA[<h1 id="注解"><a href="#注解" class="headerlink" title="注解"></a>注解</h1><p>​    Java 注解（Annotation）又称 Java 标注，是 JDK5.0 引入的一种注释机制。 注解是元数据的一种形式，提供有关</p>
-<p>于程序但不属于程序本身的数据。注解对它们注解的代码的操作没有直接影响。</p>
-<h2 id="注解声明"><a href="#注解声明" class="headerlink" title="注解声明"></a><strong>注解声明</strong></h2><h3 id="声明一个注解类型"><a href="#声明一个注解类型" class="headerlink" title="声明一个注解类型"></a><strong>声明一个注解类型</strong></h3><p>Java中所有的注解，默认实现 Annotation 接口：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> java.lang.annotation; </span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Annotation</span> </span>&#123; </span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">boolean</span> <span class="title">equals</span><span class="params">(Object obj)</span></span>; </span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">hashCode</span><span class="params">()</span></span>; </span><br><span class="line"></span><br><span class="line">	<span class="function">String <span class="title">toString</span><span class="params">()</span></span>; </span><br><span class="line"></span><br><span class="line">	Class&lt;? extends Annotation&gt; annotationType(); </span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>与声明一个”<strong>Class</strong>“不同的是，注解的声明使用 @interface 关键字。一个注解的声明如下：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Lance&#123; </span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h3 id="元注解"><a href="#元注解" class="headerlink" title="元注解"></a><strong>元注解</strong></h3><p>在定义注解时，注解类也能够使用其他的注解声明。对注解类型进行注解的注解类，我们称之为 meta</p>
-<p>annotation（元注解）。一般的，我们在定义自定义注解时，需要指定的元注解有两个 ： </p>
-<p>（另外还有<strong>@Documented</strong> 与 <strong>@Inherited</strong> 元注解，前者用于被javadoc工具提取成文档，后者表示允许子类</p>
-<p>继承父类中定义的注解）</p>
-<p><strong>@Target</strong></p>
-<p>注解标记另一个注解，以限制可以应用注解的 Java 元素类型。目标注解指定以下元素类型之一作为其值：</p>
+    <title>并发编程</title>
+    <url>/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/</url>
+    <content><![CDATA[<h1 id="Java线程基础"><a href="#Java线程基础" class="headerlink" title="Java线程基础"></a>Java线程基础</h1><h2 id="CPU核心数和线程数的关系"><a href="#CPU核心数和线程数的关系" class="headerlink" title="CPU核心数和线程数的关系"></a>CPU核心数和线程数的关系</h2><ul>
+<li>线程是CPU调度的最小单位，必须依赖于进程，且小于进程</li>
+<li>进程是资源运行的最小单位（CPU也是一个进程）</li>
+<li>CPU有核心数的说法，以前CPU核心数和线程数是相同的，现在有很多是1：2的关系</li>
+<li>CPU线程能支持很多进程运行（很多进程里还会自己开线程），原因是因为CPU有时间片轮转机制，CPU会为每个进程设置一个时间片，并放在一个队列中，用CPU的线程去处理这些时间片，并且在时间片的时间运行完之后就立刻进行切换（切换时间片成为上下文切换，也会消耗CPU时间，一次5ms），如果有进程提前运行结束，或者阻塞，时间片也会提前结束，时间片最佳的分配时间是100ms，小了会消耗大量时间进行上下文切换，多了用户体验不佳</li>
+</ul>
+<h2 id="并行和并发"><a href="#并行和并发" class="headerlink" title="并行和并发"></a>并行和并发</h2><p>​    我们举个例子,如果有条高速公路A上面并排有8条车道,那么最大的<strong><em>并行</em></strong>车辆就是8辆此条高速公路A同时并排行走的车辆小于等于8辆的时候,车辆就可以并行运行。CPU也是这个原理,一个CPU相当于一个高速公路A,核心数或者线程数就相当于并排可以通行的车道;而多个CPU就相当于并排有多条高速公路,而每个高速公路并排有多个车道。</p>
+<p>​    当谈论<strong><em>并发</em></strong>的时候一定要加个单位时间,也就是说单位时间内并发量是多少?离开了单位时间其实是没有意义的。</p>
+<p>​    俗话说,一心不能二用,这对计算机也一样,原则上一个CPU只能分配给一个进程,以便运行这个进程。我们通常使用的计算机中只有一个CPU,也就是说只有一颗心,要让它一心多用同时运行多个进程,就必须使用并发技术。实现并发技术相当复杂,最容易理解的是“时间片轮转进程调度算法”。</p>
+<p>​    综合来说：</p>
 <ul>
-<li><p>ElementType.ANNOTATION_TYPE 可以应用于注解类型。</p>
+<li><p>并发:指应用能够交替执行不同的任务,比如单CPU核心下执行多线程并非是同时执行多个任务,如果你开两个线程执行,就是在你几乎不可能察觉到的速度不断去切换这两个任务,已达到”同时执行效果”,其实并不是的,只是计算机的速度太快,我们无法察觉到而已</p>
 </li>
-<li><p>ElementType.CONSTRUCTOR 可以应用于构造函数。</p>
+<li><p>并行:指应用能够同时执行不同的任务,例:吃饭的时候可以边吃饭边打电话,这两件事情可以同时执行</p>
 </li>
-<li><p>ElementType.FIELD 可以应用于字段或属性。</p>
-</li>
-<li><p>ElementType.LOCAL_VARIABLE 可以应用于局部变量。</p>
-</li>
-<li><p>ElementType.METHOD 可以应用于方法级注解。</p>
-</li>
-<li><p>ElementType.PACKAGE 可以应用于包声明。</p>
-</li>
-<li><p>ElementType.PARAMETER 可以应用于方法的参数。</p>
-</li>
-<li><p>ElementType.TYPE 可以应用于类的任何元素。</p>
+<li><p>两者区别:一个是交替执行,一个是同时执行</p>
 </li>
 </ul>
-<p><strong>@Retention</strong></p>
-<p>注解指定标记注解的存储方式：</p>
+<h2 id="线程的启动和中止"><a href="#线程的启动和中止" class="headerlink" title="线程的启动和中止"></a>线程的启动和中止</h2><ul>
+<li><p>启动：线程的启动只有两种方式</p>
 <ul>
-<li><p>RetentionPolicy.SOURCE - 标记的注解仅保留在源级别中，并被编译器忽略。</p>
-</li>
-<li><p>RetentionPolicy.CLASS - 标记的注解在编译时由编译器保留，但 Java 虚拟机(JVM)会忽略。</p>
-</li>
-<li><p>RetentionPolicy.RUNTIME - 标记的注解由 JVM 保留，因此运行时环境可以使用它。</p>
-</li>
+<li>继承Thread，并且调用start方法</li>
+<li>实现Runnable接口，通过Thread启动</li>
 </ul>
-<p>（@Retention 三个值中 SOURCE &lt; CLASS &lt; RUNTIME，即CLASS包含了SOURCE，RUNTIME包含SOURCE、</p>
-<p>CLASS。下文会介绍他们不同的应用场景）</p>
-<p>下面来看例子：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//@Target(ElementType.TYPE) 只能在类上标记该注解 </span></span><br><span class="line"></span><br><span class="line"><span class="meta">@Target</span>(&#123;ElementType.TYPE,ElementType.FIELD&#125;) <span class="comment">// 允许在类与类属性上标记该注解 </span></span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.SOURCE) <span class="comment">//注解保留在源码中 </span></span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Lance &#123; </span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<h3 id="注解类型元素"><a href="#注解类型元素" class="headerlink" title="注解类型元素"></a><strong>注解类型元素</strong></h3><p>在上文元注解中，允许在使用注解时传递参数。我们也能让自定义注解的主体包含 <em>annotation type element (</em>注解 </p>
-<p>类型元素<em>)</em> 声明，它们看起来很像方法，可以定义可选的默认值。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Target</span>(&#123;ElementType.TYPE,ElementType.FIELD&#125;) </span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.SOURCE) </span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Lance &#123; </span><br><span class="line">	<span class="function">String <span class="title">value</span><span class="params">()</span></span>; <span class="comment">//无默认值 </span></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">age</span><span class="params">()</span> <span class="keyword">default</span> 1</span>; <span class="comment">//有默认值 </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>注意：在使用注解时，如果定义的注解中的类型元素无默认值，则必须进行传值。</p>
-<h2 id="注解应用场景"><a href="#注解应用场景" class="headerlink" title="注解应用场景"></a><strong>注解应用场景</strong></h2><p>按照<strong>@Retention</strong> 元注解定义的注解存储方式，注解可以被在三种场景下使用：</p>
-<h3 id="SOURCE"><a href="#SOURCE" class="headerlink" title="SOURCE"></a><strong>SOURCE</strong></h3><p>RetentionPolicy.SOURCE ，作用于源码级别的注解，可提供给IDE语法检查、APT等场景使用。</p>
-<p>在类中使用 SOURCE 级别的注解，其编译之后的class中会被丢弃。</p>
-<h4 id="IDE语法检查"><a href="#IDE语法检查" class="headerlink" title="IDE语法检查"></a>IDE语法检查</h4><p>在Android开发中，有提供 @IntDef 注解，此注解的定义如下：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Retention</span>(SOURCE) <span class="comment">//源码级别注解 </span></span><br><span class="line"><span class="meta">@Target</span>(&#123;ANNOTATION_TYPE&#125;) </span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> IntDef &#123; </span><br><span class="line">    <span class="keyword">int</span>[] value() <span class="keyword">default</span> &#123;&#125;;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">flag</span><span class="params">()</span> <span class="keyword">default</span> <span class="keyword">false</span></span>;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">open</span><span class="params">()</span> <span class="keyword">default</span> <span class="keyword">false</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>此注解的意义在于能够取代枚举，实现如方法入参限制。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> LANCE = <span class="number">1</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> ALVIN = <span class="number">2</span>;</span><br><span class="line"><span class="meta">@IntDef</span>(value = &#123;LANCE，ALVIN&#125;) <span class="comment">//限定为LANCE，ALVIN</span></span><br><span class="line"><span class="meta">@Target</span>(ElementType.PARAMETER) <span class="comment">//作用于参数的注解</span></span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.SOURCE) <span class="comment">//源码级别注解</span></span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Teacher &#123;</span><br><span class="line">    </span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">test</span><span class="params">(@Teacher <span class="keyword">int</span> teacher)</span> </span>&#123;</span><br><span class="line">    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>本身IDEA/AS 就是由Java开发的，工具实现了对Java语法的检查，借助注解能对被注解的特定语法进行额外检查。</p>
-<h4 id="APT注解处理器"><a href="#APT注解处理器" class="headerlink" title="APT注解处理器"></a>APT注解处理器</h4><p>​    APT全称为：”Anotation Processor Tools”，意为注解处理器。顾名思义，其用于处理注解。编写好的Java源文</p>
-<p>件，需要经过 javac 的编译，翻译为虚拟机能够加载解析的字节码Class文件。注解处理器是 javac 自带的一个工</p>
-<p>具，用来在编译时期扫描处理注解信息。你可以为某些注解注册自己的注解处理器。 注册的注解处理器由 javac</p>
-<p>调起，并将注解信息传递给注解处理器进行处理。</p>
-<blockquote>
-<p>注解处理器是对注解应用最为广泛的场景。在Glide、EventBus3、Butterknifer、Tinker、ARouter等等常用</p>
-<p>框架中都有注解处理器的身影。但是你可能会发现，这些框架中对注解的定义并不是 SOURCE 级别，更多的</p>
-<p>是 CLASS 级别，别忘了：CLASS包含了SOURCE，RUNTIME包含SOURCE、CLASS。</p>
-</blockquote>
-<h3 id="CLASS"><a href="#CLASS" class="headerlink" title="CLASS"></a>CLASS</h3><p>​    定义为 CLASS 的注解，会保留在class文件中，但是会被虚拟机忽略(即无法在运行期反射获取注解)。此时完全符合</p>
-<p>此种注解的应用场景为字节码操作。如：AspectJ、热修复Roubust中应用此场景。</p>
-<p>​    所谓字节码操作即为，直接修改字节码Class文件以达到修改代码执行逻辑的目的。在程序中有多处需要进行是否</p>
-<p>登录的判断。</p>
-<h3 id="RUNTIME"><a href="#RUNTIME" class="headerlink" title="RUNTIME"></a>RUNTIME</h3><p>注解保留至运行期，意味着我们能够在运行期间结合反射技术获取注解中的所有信息。</p>
-<h1 id="动态代理"><a href="#动态代理" class="headerlink" title="动态代理"></a>动态代理</h1><p>​    静态代理就是设计模式中的代理模式，下面看一个例子：</p>
-<p>​    如果有一个订单接口（OrderService），现在有海外订单和本地订单，海外订单需要复杂的流程，所以需要一个代理类，三个类都实现接口，代理类持有海外订单类的对象，来对他进行操作。</p>
-<p>​    <strong>再来看动态代理：</strong></p>
-<p>​    在运行时再创建代理类和其实例，因此显然效率更低。要完成这个场景，需要在运行期动态创建一个Class。JDK提</p>
-<p>供了 Proxy 来完成这件事情。基本使用如下：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//抽象角色 </span></span><br><span class="line"><span class="class"><span class="keyword">interface</span> <span class="title">Api</span> </span>&#123; </span><br><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">test</span><span class="params">(String a)</span></span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//真实角色</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ApiImpl</span></span>&#123;</span><br><span class="line">    <span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">test</span><span class="params">(String a)</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"真实实现："</span> + a);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//创建真实角色实例</span></span><br><span class="line">ApiImpl api = <span class="keyword">new</span> ApiImpl();</span><br><span class="line"><span class="comment">//JDK动态代理:</span></span><br><span class="line">Proxy.newProxyInstance(getClass().getClassLoader(), <span class="keyword">new</span> Class[]&#123;Api<span class="class">.<span class="keyword">class</span>&#125;,//<span class="title">JDK</span>实现只能代理接口</span></span><br><span class="line"><span class="class">                       <span class="title">new</span> <span class="title">InvocationHandler</span>() </span>&#123; </span><br><span class="line">                           <span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> Object <span class="title">invoke</span><span class="params">(Object proxy, Method method, Object[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123; </span><br><span class="line">                               <span class="comment">//执行真实对象方法</span></span><br><span class="line">                               <span class="keyword">return</span> method.invoke(api, args);</span><br><span class="line">                       &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
-
-<p>​    实际上， Proxy.newProxyInstance 会创建一个Class，与静态代理不同，这个Class不是由具体的.java源文件编译</p>
-<p>而来，即没有真正的文件，只是在内存中按照Class格式生成了一个Class。</p>
-<p>​    通过InvocationHandler类对代理类进行监听，在调用方法时回调。</p>
-<h1 id="泛型"><a href="#泛型" class="headerlink" title="泛型"></a>泛型</h1><ul>
-<li><p>泛型优点：</p>
+<p>但是还有一种能够获取回调的线程，就是FutureTask,他是实现Runnable接口的，有两种构造方法，传入Runnable或者传入Callable，调用get方法可以获取回调的值。</p>
+</li>
+<li><p>中止</p>
 <ul>
-<li>代码健壮性强（编译时期不报错运行时就不会报错）</li>
-<li>不用类型强转</li>
-<li>复用性更强</li>
+<li>自然中止：run方法执行完毕，或者异常中止</li>
+<li>手动中止：<ul>
+<li>不安全操作：暂停、恢复和停止操作对应在线程Thread的API就是<strong>suspend()、resume()和stop()</strong>，但是都已经弃用，因为他们在结束了线程之后并不会释放资源，有很多问题。</li>
+<li>安全操作：使用interrupt方法，这个方法只是把中断位设置为true，并不会暴力结束线程，调用isInterrupt方法可以获取中断位，调用Thread.Interrupted方法会返回中断位，并且重置中断位，处于阻塞的线程（在调用wait、join、sleep方法后）在调用此方法后会抛出一个异常</li>
 </ul>
 </li>
-<li><p>泛型缺点</p>
+</ul>
+</li>
+<li><p>yield方法让当前线程让出CPU占用权，join方法可以让两个并发的线程顺序执行</p>
+</li>
+</ul>
+<h2 id="锁用法"><a href="#锁用法" class="headerlink" title="锁用法"></a>锁用法</h2><ul>
+<li><p>分类</p>
 <ul>
-<li><p>无法定义基本类型，无法使用instanceof关键字，因为泛型擦除后会擦除为顶层类型</p>
-</li>
-<li><p>泛型因为会擦除，所以不存在协变，所以没有泛型数组</p>
-</li>
-<li><p>无法定义泛型的静态变量和静态常量，因为泛型要在类实例构造之后才能确定，而静态变量、常量在类实例构造之前就已经初始化</p>
-</li>
-<li><p>无法在一个泛型中定义两个相同的方法，如：</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Test</span>&lt;<span class="title">T</span>&gt;</span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">void</span> <span class="title">equals</span><span class="params">(Object o)</span></span>&#123;</span><br><span class="line">        </span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">equals</span><span class="params">(T t)</span></span>&#123;</span><br><span class="line">        </span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>因为泛型擦除后两个方法完全一样，无法区别</p>
-</li>
-<li><p>泛型无法构造实例，但是可以通过反射构造</p>
-</li>
+<li>类锁</li>
+<li>对象锁</li>
 </ul>
 </li>
-<li><p>类型擦除机制</p>
+<li><p>synchronized 以及ReentrantLock都是可重入锁，前者是非公平锁，后者可以在构造函数里设置为公平锁</p>
+</li>
+<li><p>wait与notify/notifyAll：</p>
 <ul>
-<li><p>如果没有父类，擦除为Object</p>
+<li><p>等待唤醒机制：<br>  wait(); 等待/冻结 ：可以将线程冻结，释放CPU执行资格，释放CPU执行权，并把此线程临时存储到线程池</p>
+<p>　　notify(); 唤醒线程池里面 任意一个线程，没有顺序<br>　　 notifyAll(); 唤醒线程池里面，全部的线程</p>
 </li>
-<li><p>如果有父类，擦除为最顶层的父类</p>
+<li><p>使用等待唤醒注意事项：<br>1.使用来wait();冻结，就必须要被其他方notify();，否则一直wait()冻结，所以等待与唤醒是配合一起使用的<br>2.wait();  notify();  notifyAll(); 等方法必须被synchronized(锁) {包裹起来}，意思就是：wait();  notify();  notifyAll();  必须要有同步锁🔒，否则毫无意义<br>3.wait();  notify();  notifyAll(); 等方法必须持有同一把锁🔒，因为：lockA.wait();  只能使用 lockA.notify(); / lockA.notifyAll(); , 它们是使用同一把锁🔒的</p>
 </li>
-<li><p>如果有实现的接口，擦除为实现的第一个接口</p>
+</ul>
 </li>
-<li><p>为保证多态，会在编译时期定义桥方法，如：</p>
-<p>这是擦除之后的代码</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Node</span> </span>&#123;</span><br><span class="line">    <span class="keyword">public</span> Object data;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">Node</span><span class="params">(Object data)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.data = data; </span><br><span class="line">    &#125; </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setData</span><span class="params">(Object data)</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"Node.setData"</span>);</span><br><span class="line">        <span class="keyword">this</span>.data = data;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MyNode</span> <span class="keyword">extends</span> <span class="title">Node</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">MyNode</span><span class="params">(Integer data)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>(data);</span><br><span class="line">    &#125; </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setData</span><span class="params">(Integer data)</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"MyNode.setData"</span>);</span><br><span class="line">        <span class="keyword">super</span>.setData(data);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setData</span><span class="params">(Object data)</span> </span>&#123;</span><br><span class="line">        setData((Integer) data);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</ul>
+<h2 id="线程状态"><a href="#线程状态" class="headerlink" title="线程状态"></a>线程状态</h2><p>Java中线程的状态分为6种：</p>
+<ol>
+<li><p>初始(NEW)：新创建了一个线程对象，但还没有调用start()方法。</p>
+</li>
+<li><p>运行(RUNNABLE)：Java线程中将就绪（ready）和运行中（running）两种状态笼统的称为“运行”。</p>
+<p>线程对象创建后，其他线程(比如main线程）调用了该对象的start()方法。该状态的线程位于可运行线程池中，等待被线程调度选中，获取CPU的使用权，此时处于就绪状态（ready）。就绪状态的线程在获得CPU时间片后变为运行中状态（running）。</p>
+</li>
+<li><p>阻塞(BLOCKED)：表示线程阻塞于锁。</p>
+</li>
+<li><p>等待(WAITING)：进入该状态的线程需要等待其他线程做出一些特定动作（通知或中断）</p>
+</li>
+<li><p>超时等待(TIMED_WAITING)：该状态不同于WAITING，它可以在指定的时间后自行返回。</p>
+</li>
+<li><p>终止(TERMINATED)：表示该线程已经执行完毕。</p>
+</li>
+</ol>
+<p>状态之间的变迁如下图所示：</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/%E7%BA%BF%E7%A8%8B%E7%8A%B6%E6%80%81.png" class title="线程状态">
 
-<p>setData方法就不为子类重写父类的方法了，所以会在子类中自动添加一个桥接方法setData（Object o），保证多态</p>
+<h2 id="死锁"><a href="#死锁" class="headerlink" title="死锁"></a>死锁</h2><p>​    是指两个或两个以上的进程在执行过程中，由于竞争资源或者由于彼此通信而造成的一种阻塞的现象，若无外力作用，它们都将无法推进下去。此时称系统处于死锁状态或系统产生了死锁。</p>
+<p>同时，死锁还有几个要求：</p>
+<p>1、争夺资源的顺序不对，如果争夺资源的顺序是一样的，也不会产生死锁。</p>
+<p>2、争夺者拿到资源不放手。</p>
+<p>两种解决方式：</p>
+<p>1、 内部通过顺序比较，确定拿锁的顺序。</p>
+<p>2、采用尝试拿锁的机制。</p>
+<h1 id="ThreadLocal辨析"><a href="#ThreadLocal辨析" class="headerlink" title="ThreadLocal辨析"></a>ThreadLocal辨析</h1><h2 id="与Synchonized的比较"><a href="#与Synchonized的比较" class="headerlink" title="与Synchonized的比较"></a>与Synchonized的比较</h2><p>​    ThreadLocal和Synchonized都用于解决多线程并发訪问。可是ThreadLocal与synchronized有本质的差别。synchronized是利用锁的机制，使变量或代码块在某一时该仅仅能被一个线程訪问。而ThreadLocal为每个线程都提供了变量的副本，使得每个线程在某一时间訪问到的并非同一个对象，这样就隔离了多个线程对数据的数据共享。</p>
+<h2 id="ThreadLocal的使用"><a href="#ThreadLocal的使用" class="headerlink" title="ThreadLocal的使用"></a>ThreadLocal的使用</h2><p>ThreadLocal类接口很简单，只有4个方法，我们先来了解一下：</p>
+<ul>
+<li><p>void set(Object value) </p>
+<p>设置当前线程的线程局部变量的值。</p>
 </li>
-<li><p>为保证安全，有时候会在编译时期进行类型强转</p>
+<li><p>public Object get() </p>
+<p>该方法返回当前线程所对应的线程局部变量。</p>
+</li>
+<li><p>public void remove() </p>
+<p>将当前线程局部变量的值删除，目的是为了减少内存的占用，该方法是JDK 5.0新增的方法。需要指出的是，当线程结束后，对应该线程的局部变量将自动被垃圾回收，所以显式调用该方法清除线程的局部变量并不是必须的操作，但它可以加快内存回收的速度。</p>
+</li>
+<li><p>protected Object initialValue() </p>
+<p>返回该线程局部变量的初始值，该方法是一个protected的方法，显然是为了让子类覆盖而设计的。这个方法是一个延迟调用方法，在线程第1次调用get()或set(Object)时才执行，并且仅执行1次。ThreadLocal中的缺省实现直接返回一个null。</p>
+</li>
+<li><p>public final static ThreadLocal<String> RESOURCE = new ThreadLocal<String>();</String></String></p>
+<p>RESOURCE代表一个能够存放String类型的ThreadLocal对象。此时不论什么一个线程能够并发访问这个变量，对它进行写入、读取操作，都是线程安全的。</p>
 </li>
 </ul>
+<h2 id="实现解析"><a href="#实现解析" class="headerlink" title="实现解析"></a>实现解析</h2><img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/ThreadLocal%E5%AE%9E%E7%8E%B01.png" class title="ThreadLocal实现1">
+
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/ThreadLocal%E5%AE%9E%E7%8E%B02.png" class title="ThreadLocal实现2">
+
+<ul>
+<li><p>set方法：</p>
+<p>通过getMap方法获取当前线程的ThreadLocalMap（实际就是Thread中的一个静态变量，初始化为null），向Entry数组中添加一个Entry</p>
+</li>
+<li><p>get方法：获取当前线程的ThreadLocalMap，如果为空，就返回ThreadLocal创建时的初始值，不为空，就获取当前线程这个ThreadLocal的value</p>
 </li>
 </ul>
+<h1 id="CAS基本原理"><a href="#CAS基本原理" class="headerlink" title="CAS基本原理"></a>CAS基本原理</h1><h2 id="什么是原子操作？如何实现原子操作？"><a href="#什么是原子操作？如何实现原子操作？" class="headerlink" title="什么是原子操作？如何实现原子操作？"></a>什么是原子操作？如何实现原子操作？</h2><p>​    假定有两个操作A和B(A和B可能都很复杂)，如果从执行A的线程来看，当另一个线程执行B时，要么将B全部执行完，要么完全不执行B，那么A和B对彼此来说是原子的。</p>
+<p>​    实现原子操作可以使用锁，锁机制，满足基本的需求是没有问题的了，但是有的时候我们的需求并非这么简单，我们需要更有效，更加灵活的机制，synchronized关键字是基于阻塞的锁机制，也就是说当一个线程拥有锁的时候，访问同一资源的其它线程需要等待，直到该线程释放锁，</p>
+<p>​    这里会有些问题：首先，如果被阻塞的线程优先级很高很重要怎么办？其次，如果获得锁的线程一直不释放锁怎么办？（这种情况是非常糟糕的）。还有一种情况，如果有大量的线程来竞争资源，那CPU将会花费大量的时间和资源来处理这些竞争，同时，还有可能出现一些例如死锁之类的情况，最后，其实锁机制是一种比较粗糙，粒度比较大的机制，相对于像计数器这样的需求有点儿过于笨重。</p>
+<p>​    实现原子操作还可以使用当前的处理器基本都支持CAS()的指令，只不过每个厂家所实现的算法并不一样，每一个CAS操作过程都包含三个运算符：一个内存地址V，一个期望的值A和一个新值B，操作的时候如果这个地址上存放的值等于这个期望的值A，则将地址上的值赋为新值B，否则不做任何操作。</p>
+<p>​    CAS的基本思路就是，如果这个地址上的值和期望的值相等，则给其赋予新值，否则不做任何事儿，但是要返回原值是多少。循环CAS就是在一个循环里不断的做cas操作，直到成功为止。</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/CAS%E5%8E%9F%E7%90%86.png" class title="CAS原理">
+
+<h2 id="CAS实现原子操作的三大问题"><a href="#CAS实现原子操作的三大问题" class="headerlink" title="CAS实现原子操作的三大问题"></a>CAS实现原子操作的三大问题</h2><h3 id="ABA问题"><a href="#ABA问题" class="headerlink" title="ABA问题"></a>ABA问题</h3><p>​    因为CAS需要在操作值的时候，检查值有没有发生变化，如果没有发生变化则更新，但是如果一个值原来是A，变成了B，又变成了A，那么使用CAS进行检查时会发现它的值没有发生变化，但是实际上却变化了。</p>
+<p>​    ABA问题的解决思路就是使用版本号。在变量前面追加上版本号，每次变量更新的时候把版本号加1，那么A→B→A就会变成1A→2B→3A。举个通俗点的例子，你倒了一杯水放桌子上，干了点别的事，然后同事把你水喝了又给你重新倒了一杯水，你回来看水还在，拿起来就喝，如果你不管水中间被人喝过，只关心水还在，这就是ABA问题。</p>
+<p>​    如果你是一个讲卫生讲文明的小伙子，不但关心水在不在，还要在你离开的时候水被人动过没有，因为你是程序员，所以就想起了放了张纸在旁边，写上初始值0，别人喝水前麻烦先做个累加才能喝水。</p>
+<h3 id="循环时间长开销大"><a href="#循环时间长开销大" class="headerlink" title="循环时间长开销大"></a>循环时间长开销大</h3><p>自旋CAS如果长时间不成功，会给CPU带来非常大的执行开销。</p>
+<h3 id="只能保证一个共享变量的原子操作"><a href="#只能保证一个共享变量的原子操作" class="headerlink" title="只能保证一个共享变量的原子操作"></a>只能保证一个共享变量的原子操作</h3><p>​    当对一个共享变量执行操作时，我们可以使用循环CAS的方式来保证原子操作，但是对多个共享变量操作时，循环CAS就无法保证操作的原子性，这个时候就可以用锁。</p>
+<p>​    还有一个取巧的办法，就是把多个共享变量合并成一个共享变量来操作。比如，有两个共享变量i＝2，j=a，合并一下ij=2a，然后用CAS来操作ij。从Java 1.5开始，JDK提供了AtomicReference类来保证引用对象之间的原子性，就可以把多个变量放在一个对象里来进行CAS操作。</p>
+<h2 id="Jdk中相关原子操作类的使用"><a href="#Jdk中相关原子操作类的使用" class="headerlink" title="Jdk中相关原子操作类的使用"></a>Jdk中相关原子操作类的使用</h2><h3 id="AtomicInteger"><a href="#AtomicInteger" class="headerlink" title="AtomicInteger"></a>AtomicInteger</h3><ul>
+<li><p>int addAndGet（int delta）：以原子方式将输入的数值与实例中的值（AtomicInteger里的value）相加，并返回结果。</p>
+</li>
+<li><p>boolean compareAndSet（int expect，int update）：如果输入的数值等于预期值，则以原子方式将该值设置为输入的值。</p>
+</li>
+<li><p>int getAndIncrement()：以原子方式将当前值加1，注意，这里返回的是自增前的值。</p>
+</li>
+<li><p>int getAndSet（int newValue）：以原子方式设置为newValue的值，并返回旧值。</p>
+</li>
+</ul>
+<h3 id="AtomicIntegerArray"><a href="#AtomicIntegerArray" class="headerlink" title="AtomicIntegerArray"></a>AtomicIntegerArray</h3><p>主要是提供原子的方式更新数组里的整型，其常用方法如下。</p>
+<p>•int addAndGet（int i，int delta）：以原子方式将输入值与数组中索引i的元素相加。</p>
+<p>•boolean compareAndSet（int i，int expect，int update）：如果当前值等于预期值，则以原子方式将数组位置i的元素设置成update值。</p>
+<p>​    需要注意的是，数组value通过构造方法传递进去，然后AtomicIntegerArray会将当前数组复制一份，所以当AtomicIntegerArray对内部的数组元素进行修改时，不会影响传入的数组。</p>
+<h3 id="更新引用类型"><a href="#更新引用类型" class="headerlink" title="更新引用类型"></a>更新引用类型</h3><p>​    原子更新基本类型的AtomicInteger，只能更新一个变量，如果要原子更新多个变量，就需要使用这个原子更新引用类型提供的类。Atomic包提供了以下3个类。</p>
+<h4 id="AtomicReference"><a href="#AtomicReference" class="headerlink" title="AtomicReference"></a>AtomicReference</h4><p>原子更新引用类型。</p>
+<h4 id="AtomicStampedReference"><a href="#AtomicStampedReference" class="headerlink" title="AtomicStampedReference"></a>AtomicStampedReference</h4><p>​    利用版本戳的形式记录了每次改变以后的版本号，这样的话就不会存在ABA问题了。这就是AtomicStampedReference的解决方案。AtomicMarkableReference跟AtomicStampedReference差不多， AtomicStampedReference是使用pair的int stamp作为计数器使用，AtomicMarkableReference的pair使用的是boolean mark。 还是那个水的例子，AtomicStampedReference可能关心的是动过几次，AtomicMarkableReference关心的是有没有被人动过，方法都比较简单。</p>
+<h4 id="AtomicMarkableReference"><a href="#AtomicMarkableReference" class="headerlink" title="AtomicMarkableReference"></a>AtomicMarkableReference</h4><p>​    原子更新带有标记位的引用类型。可以原子更新一个布尔类型的标记位和引用类型。构造方法是AtomicMarkableReference（V initialRef，booleaninitialMark）。</p>
+<h1 id="阻塞队列和线程池原理"><a href="#阻塞队列和线程池原理" class="headerlink" title="阻塞队列和线程池原理"></a>阻塞队列和线程池原理</h1><h2 id="阻塞队列"><a href="#阻塞队列" class="headerlink" title="阻塞队列"></a>阻塞队列</h2><h3 id="什么是阻塞队列"><a href="#什么是阻塞队列" class="headerlink" title="什么是阻塞队列"></a>什么是阻塞队列</h3><p>1）支持阻塞的插入方法：意思是当队列满时，队列会阻塞插入元素的线程，直到队列不满。</p>
+<p>2）支持阻塞的移除方法：意思是在队列为空时，获取元素的线程会等待队列变为非空。</p>
+<p>​    在并发编程中使用<strong><em>生产者和消费者模式</em></strong>能够解决绝大多数并发问题。该模式通过平衡生产线程和消费线程的工作能力来提高程序整体处理数据的速度。</p>
+<p>​    在线程世界里，生产者就是生产数据的线程，消费者就是消费数据的线程。在多线程开发中，如果生产者处理速度很快，而消费者处理速度很慢，那么生产者就必须等待消费者处理完，才能继续生产数据。同样的道理，如果消费者的处理能力大于生产者，那么消费者就必须等待生产者。</p>
+<p>​    为了解决这种生产消费能力不均衡的问题，便有了生产者和消费者模式。生产者和消费者模式是通过一个容器来解决生产者和消费者的强耦合问题。生产者和消费者彼此之间不直接通信，而是通过阻塞队列来进行通信，所以生产者生产完数据之后不用等待消费者处理，直接扔给阻塞队列，消费者不找生产者要数据，而是直接从阻塞队列里取，阻塞队列就相当于一个缓冲区，平衡了生产者和消费者的处理能力。</p>
+<p>​    阻塞队列常用于生产者和消费者的场景，生产者是向队列里添加元素的线程，消费者是从队列里取元素的线程。阻塞队列就是生产者用来存放元素、消费者用来获取元素的容器。</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/%E9%98%BB%E5%A1%9E%E9%98%9F%E5%88%97.png" class title="阻塞队列"> 
+
+<ul>
+<li><p>抛出异常：当队列满时，如果再往队列里插入元素，会抛出IllegalStateException（”Queuefull”）异常。当队列空时，从队列里获取元素会抛出NoSuchElementException异常。</p>
+</li>
+<li><p>返回特殊值：当往队列插入元素时，会返回元素是否插入成功，成功返回true。如果是移除方法，则是从队列里取出一个元素，如果没有则返回null。</p>
+</li>
+<li><p>一直阻塞：当阻塞队列满时，如果生产者线程往队列里put元素，队列会一直阻塞生产者线程，直到队列可用或者响应中断退出。当队列空时，如果消费者线程从队列里take元素，队列会阻塞住消费者线程，直到队列不为空。</p>
+</li>
+<li><p>超时退出：当阻塞队列满时，如果生产者线程往队列里插入元素，队列会阻塞生产者线程一段时间，如果超过了指定的时间，生产者线程就会退出。</p>
+</li>
+</ul>
+<h3 id="常用阻塞队列"><a href="#常用阻塞队列" class="headerlink" title="常用阻塞队列"></a>常用阻塞队列</h3><ul>
+<li><p>ArrayBlockingQueue：一个由数组结构组成的有界阻塞队列。</p>
+</li>
+<li><p>LinkedBlockingQueue：一个由链表结构组成的有界阻塞队列。</p>
+</li>
+<li><p>PriorityBlockingQueue：一个支持优先级排序的无界阻塞队列。</p>
+</li>
+<li><p>DelayQueue：一个使用优先级队列实现的无界阻塞队列。</p>
+</li>
+<li><p>SynchronousQueue：一个不存储元素的阻塞队列。</p>
+</li>
+<li><p>LinkedTransferQueue：一个由链表结构组成的无界阻塞队列。</p>
+</li>
+<li><p>LinkedBlockingDeque：一个由链表结构组成的双向阻塞队列。</p>
+</li>
+</ul>
+<p>以上的阻塞队列都实现了BlockingQueue接口，也都是线程安全的。</p>
+<h4 id="有界无界？"><a href="#有界无界？" class="headerlink" title="有界无界？"></a>有界无界？</h4><p>​    有限队列就是长度有限，满了以后生产者会阻塞，无界队列就是里面能放无数的东西而不会因为队列长度限制被阻塞，当然空间限制来源于系统资源的限制，如果处理不及时，导致队列越来越大越来越大，超出一定的限制致使内存超限，操作系统或者JVM帮你解决烦恼，直接把你 OOM kill 省事了。</p>
+<p>​    无界也会阻塞，为何？因为阻塞不仅仅体现在生产者放入元素时会阻塞，消费者拿取元素时，如果没有元素，同样也会阻塞。</p>
+<h4 id="ArrayBlockingQueue"><a href="#ArrayBlockingQueue" class="headerlink" title="ArrayBlockingQueue"></a>ArrayBlockingQueue</h4><p>​    是一个用数组实现的有界阻塞队列。此队列按照先进先出（FIFO）的原则对元素进行排序。默认情况下不保证线程公平的访问队列，所谓公平访问队列是指阻塞的线程，可以按照阻塞的先后顺序访问队列，即先阻塞线程先访问队列。非公平性是对先等待的线程是非公平的，当队列可用时，阻塞的线程都可以争夺访问队列的资格，有可能先阻塞的线程最后才访问队列。初始化时有参数可以设置</p>
+<h4 id="LinkedBlockingQueue"><a href="#LinkedBlockingQueue" class="headerlink" title="LinkedBlockingQueue"></a>LinkedBlockingQueue</h4><p>是一个用链表实现的有界阻塞队列。此队列的默认和最大长度为Integer.MAX_VALUE。此队列按照先进先出的原则对元素进行排序。</p>
+<h4 id="Array实现和Linked实现的区别"><a href="#Array实现和Linked实现的区别" class="headerlink" title="Array实现和Linked实现的区别"></a>Array实现和Linked实现的区别</h4><ol>
+<li><p>队列中锁的实现不同</p>
+<p>ArrayBlockingQueue实现的队列中的锁是没有分离的，即生产和消费用的是同一个锁；</p>
+<p>LinkedBlockingQueue实现的队列中的锁是分离的，即生产用的是putLock，消费是takeLock</p>
+</li>
+<li><p>在生产或消费时操作不同</p>
+<p>ArrayBlockingQueue实现的队列中在生产和消费的时候，是直接将枚举对象插入或移除的；</p>
+<p>LinkedBlockingQueue实现的队列中在生产和消费的时候，需要把枚举对象转换为Node<E>进行插入或移除，会影响性能</E></p>
+</li>
+<li><p>队列大小初始化方式不同</p>
+<p>ArrayBlockingQueue实现的队列中必须指定队列的大小；</p>
+<p>LinkedBlockingQueue实现的队列中可以不指定队列的大小，但是默认是Integer.MAX_VALUE</p>
+</li>
+</ol>
+<h4 id="PriorityBlockingQueue"><a href="#PriorityBlockingQueue" class="headerlink" title="PriorityBlockingQueue"></a>PriorityBlockingQueue</h4><p>​    PriorityBlockingQueue是一个支持优先级的无界阻塞队列。默认情况下元素采取自然顺序升序排列。也可以自定义类实现compareTo()方法来指定元素排序规则，或者初始化PriorityBlockingQueue时，指定构造参数Comparator来对元素进行排序。需要注意的是不能保证同优先级元素的顺序。</p>
+<h4 id="DelayQueue"><a href="#DelayQueue" class="headerlink" title="DelayQueue"></a>DelayQueue</h4><p>​    是一个支持延时获取元素的无界阻塞队列。队列使用PriorityQueue来实现。队列中的元素必须实现Delayed接口，在创建元素时可以指定多久才能从队列中获取当前元素。只有在延迟期满时才能从队列中提取元素。</p>
+<p>​    DelayQueue非常有用，可以将DelayQueue运用在以下应用场景。</p>
+<p>​    缓存系统的设计：可以用DelayQueue保存缓存元素的有效期，使用一个线程循环查询DelayQueue，一旦能从DelayQueue中获取元素时，表示缓存有效期到了。</p>
+<h4 id="SynchronousQueue"><a href="#SynchronousQueue" class="headerlink" title="SynchronousQueue"></a>SynchronousQueue</h4><p>​    是一个不存储元素的阻塞队列。每一个put操作必须等待一个take操作，否则不能继续添加元素。SynchronousQueue可以看成是一个传球手，负责把生产者线程处理的数据直接传递给消费者线程。队列本身并不存储任何元素，非常适合传递性场景。SynchronousQueue的吞吐量高于LinkedBlockingQueue和ArrayBlockingQueue。</p>
+<h4 id="LinkedTransferQueue"><a href="#LinkedTransferQueue" class="headerlink" title="LinkedTransferQueue"></a>LinkedTransferQueue</h4><p>多了tryTransfer和transfer方法，</p>
+<p>（1）transfer方法</p>
+<p>如果当前有消费者正在等待接收元素（消费者使用take()方法或带时间限制的poll()方法时），transfer方法可以把生产者传入的元素立刻transfer（传输）给消费者。如果没有消费者在等待接收元素，transfer方法会将元素存放在队列的tail节点，并等到该元素被消费者消费了才返回。</p>
+<p>（2）tryTransfer方法</p>
+<p>tryTransfer方法是用来试探生产者传入的元素是否能直接传给消费者。如果没有消费者等待接收元素，则返回false。和transfer方法的区别是tryTransfer方法无论消费者是否接收，方法立即返回，而transfer方法是必须等到消费者消费了才返回。</p>
+<h4 id="LinkedBlockingDeque"><a href="#LinkedBlockingDeque" class="headerlink" title="LinkedBlockingDeque"></a>LinkedBlockingDeque</h4><p>​    LinkedBlockingDeque是一个由链表结构组成的双向阻塞队列。所谓双向队列指的是可以从队列的两端插入和移出元素。双向队列因为多了一个操作队列的入口，在多线程同时入队时，也就减少了一半的竞争。</p>
+<p>​    多了addFirst、addLast、offerFirst、offerLast、peekFirst和peekLast等方法，以First单词结尾的方法，表示插入、获取（peek）或移除双端队列的第一个元素。以Last单词结尾的方法，表示插入、获取或移除双端队列的最后一个元素。另外，插入方法add等同于addLast，移除方法remove等效于removeFirst。但是take方法却等同于takeFirst，不知道是不是JDK的bug，使用时还是用带有First和Last后缀的方法更清楚。在初始化LinkedBlockingDeque时可以设置容量防止其过度膨胀。另外，双向阻塞队列可以运用在“工作窃取”模式中。</p>
+<h2 id="线程池"><a href="#线程池" class="headerlink" title="线程池"></a>线程池</h2><h3 id="为什么要用线程池？"><a href="#为什么要用线程池？" class="headerlink" title="为什么要用线程池？"></a>为什么要用线程池？</h3><p>​    Java中的线程池是运用场景最多的并发框架，几乎所有需要异步或并发执行任务的程序都可以使用线程池。在开发过程中，合理地使用线程池能够带来3个好处。</p>
+<p>​    第一：降低资源消耗。通过重复利用已创建的线程降低线程创建和销毁造成的消耗。</p>
+<p>​    第二：提高响应速度。当任务到达时，任务可以不需要等到线程创建就能立即执行。假设一个服务器完成一项任务所需时间为：T1 创建线程时间，T2 在线程中执行任务的时间，T3 销毁线程时间。  如果：T1 + T3 远大于 T2，则可以采用线程池，以提高服务器性能。线程池技术正是关注如何缩短或调整T1,T3时间的技术，从而提高服务器程序性能的。它把T1，T3分别安排在服务器程序的启动和结束的时间段或者一些空闲的时间段，这样在服务器程序处理客户请求时，不会有T1，T3的开销了。</p>
+<p>​    第三：提高线程的可管理性。线程是稀缺资源，如果无限制地创建，不仅会消耗系统资源，还会降低系统的稳定性，使用线程池可以进行统一分配、调优和监控。</p>
+<h3 id="ThreadPoolExecutor-的类关系"><a href="#ThreadPoolExecutor-的类关系" class="headerlink" title="ThreadPoolExecutor 的类关系"></a>ThreadPoolExecutor 的类关系</h3><p>​    Executor是一个接口，它是Executor框架的基础，它将任务的提交与任务的执行分离开来。</p>
+<p>​    ExecutorService接口继承了Executor，在其上做了一些shutdown()、submit()的扩展，可以说是真正的线程池接口；</p>
+<p>​    AbstractExecutorService抽象类实现了ExecutorService接口中的大部分方法；</p>
+<p>​    ThreadPoolExecutor是线程池的核心实现类，用来执行被提交的任务。</p>
+<p>​    ScheduledExecutorService接口继承了ExecutorService接口，提供了带”周期执行”功能ExecutorService；</p>
+<p>​    ScheduledThreadPoolExecutor是一个实现类，可以在给定的延迟后运行命令，或者定期执行命令。ScheduledThreadPoolExecutor比Timer更灵活，功能更强大。</p>
+<h3 id="线程池的创建各个参数含义"><a href="#线程池的创建各个参数含义" class="headerlink" title="线程池的创建各个参数含义"></a>线程池的创建各个参数含义</h3><p>​    public ThreadPoolExecutor(int corePoolSize,int maximumPoolSize,long keepAliveTime,TimeUnit unit,BlockingQueue<Runnable> workQueue,ThreadFactory threadFactory,RejectedExecutionHandler handler)</Runnable></p>
+<h4 id="corePoolSize"><a href="#corePoolSize" class="headerlink" title="corePoolSize"></a>corePoolSize</h4><p>​    线程池中的核心线程数，当提交一个任务时，线程池创建一个新线程执行任务，直到当前线程数等于corePoolSize；</p>
+<p>​    如果当前线程数为corePoolSize，继续提交的任务被保存到阻塞队列中，等待被执行；</p>
+<p>​    如果执行了线程池的prestartAllCoreThreads()方法，线程池会提前创建并启动所有核心线程。</p>
+<h4 id="maximumPoolSize"><a href="#maximumPoolSize" class="headerlink" title="maximumPoolSize"></a>maximumPoolSize</h4><p>​    线程池中允许的最大线程数。如果当前阻塞队列满了，且继续提交任务，则创建新的线程执行任务，前提是当前线程数小于maximumPoolSize</p>
+<h4 id="keepAliveTime"><a href="#keepAliveTime" class="headerlink" title="keepAliveTime"></a>keepAliveTime</h4><p>线程空闲时的存活时间，即当线程没有任务执行时，继续存活的时间。默认情况下，该参数只在线程数大于corePoolSize时才有用</p>
+<h4 id="TimeUnit"><a href="#TimeUnit" class="headerlink" title="TimeUnit"></a>TimeUnit</h4><p>keepAliveTime的时间单位</p>
+<h4 id="workQueue"><a href="#workQueue" class="headerlink" title="workQueue"></a>workQueue</h4><p>​    workQueue必须是BlockingQueue阻塞队列。当线程池中的线程数超过它的corePoolSize的时候，线程会进入阻塞队列进行阻塞等待。通过workQueue，线程池实现了阻塞功能。</p>
+<p>​    一般来说，我们应该尽量使用有界队列，因为使用无界队列作为工作队列会对线程池带来如下影响。</p>
+<p>​    1）当线程池中的线程数达到corePoolSize后，新任务将在无界队列中等待，因此线程池中的线程数不会超过corePoolSize。</p>
+<p>​    2）由于1，使用无界队列时maximumPoolSize将是一个无效参数。</p>
+<p>​    3）由于1和2，使用无界队列时keepAliveTime将是一个无效参数。</p>
+<p>​    4）更重要的，使用无界queue可能会耗尽系统资源，有界队列则有助于防止资源耗尽，同时即使使用有界队列，也要尽量控制队列的大小在一个合适的范围。</p>
+<h4 id="threadFactory"><a href="#threadFactory" class="headerlink" title="threadFactory"></a>threadFactory</h4><p>​    创建线程的工厂，通过自定义的线程工厂可以给每个新建的线程设置一个具有识别度的线程名，当然还可以更加自由的对线程做更多的设置，比如设置所有的线程为守护线程。</p>
+<p>​    Executors静态工厂里默认的threadFactory，线程的命名规则是“pool-数字-thread-数字”。</p>
+<h4 id="RejectedExecutionHandler"><a href="#RejectedExecutionHandler" class="headerlink" title="RejectedExecutionHandler"></a>RejectedExecutionHandler</h4><p>​    线程池的饱和策略，当阻塞队列满了，且没有空闲的工作线程，如果继续提交任务，必须采取一种策略处理该任务，线程池提供了4种策略：</p>
+<p>（1）AbortPolicy：直接抛出异常，默认策略；</p>
+<p>（2）CallerRunsPolicy：用调用者所在的线程来执行任务；</p>
+<p>（3）DiscardOldestPolicy：丢弃阻塞队列中靠最前的任务，并执行当前任务；</p>
+<p>（4）DiscardPolicy：直接丢弃任务；</p>
+<p>当然也可以根据应用场景实现RejectedExecutionHandler接口，自定义饱和策略，如记录日志或持久化存储不能处理的任务。</p>
+<h3 id="线程池的工作机制"><a href="#线程池的工作机制" class="headerlink" title="线程池的工作机制"></a>线程池的工作机制</h3><p>1）如果当前运行的线程少于corePoolSize，则创建新线程来执行任务（注意，执行这一步骤需要获取全局锁）。</p>
+<p>2）如果运行的线程等于或多于corePoolSize，则将任务加入BlockingQueue。</p>
+<p>3）如果无法将任务加入BlockingQueue（队列已满），则创建新的线程来处理任务。</p>
+<p>4）如果创建新线程将使当前运行的线程超出maximumPoolSize，任务将被拒绝，并调用RejectedExecutionHandler.rejectedExecution()方法。</p>
+<h3 id="提交任务"><a href="#提交任务" class="headerlink" title="提交任务"></a>提交任务</h3><p>​    execute()方法用于提交不需要返回值的任务，所以无法判断任务是否被线程池执行成功。</p>
+<p>​    submit()方法用于提交需要返回值的任务。线程池会返回一个future类型的对象，通过这个future对象可以判断任务是否执行成功，并且可以通过future的get()方法来获取返回值，get()方法会阻塞当前线程直到任务完成，而使用get（long timeout，TimeUnit unit）方法则会阻塞当前线程一段时间后立即返回，这时候有可能任务没有执行完。</p>
+<h3 id="关闭线程池"><a href="#关闭线程池" class="headerlink" title="关闭线程池"></a>关闭线程池</h3><p>​    可以通过调用线程池的shutdown或shutdownNow方法来关闭线程池。它们的原理是遍历线程池中的工作线程，然后逐个调用线程的interrupt方法来中断线程，所以无法响应中断的任务可能永远无法终止。但是它们存在一定的区别，shutdownNow首先将线程池的状态设置成STOP，然后尝试停止所有的正在执行或暂停任务的线程，并返回等待执行任务的列表，而shutdown只是将线程池的状态设置成SHUTDOWN状态，然后中断<strong><em>所有没有正在执行任务的线程</em></strong>。</p>
+<p>​    只要调用了这两个关闭方法中的任意一个，isShutdown方法就会返回true。当所有的任务都已关闭后，才表示线程池关闭成功，这时调用isTerminaed方法会返回true。至于应该调用哪一种方法来关闭线程池，应该由提交到线程池的任务特性决定，通常调用shutdown方法来关闭线程池，如果任务不一定要执行完，则可以调用shutdownNow方法。</p>
+<h3 id="合理地配置线程池"><a href="#合理地配置线程池" class="headerlink" title="合理地配置线程池"></a>合理地配置线程池</h3><p>​    要想合理地配置线程池，就必须首先分析任务特性</p>
+<p>​    要想合理地配置线程池，就必须首先分析任务特性，可以从以下几个角度来分析。</p>
+<ul>
+<li><p>任务的性质：CPU密集型任务、IO密集型任务和混合型任务。</p>
+</li>
+<li><p>任务的优先级：高、中和低。</p>
+</li>
+<li><p>任务的执行时间：长、中和短。</p>
+</li>
+<li><p>任务的依赖性：是否依赖其他系统资源，如数据库连接。</p>
+</li>
+</ul>
+<p>​    性质不同的任务可以用不同规模的线程池分开处理。</p>
+<p>​    CPU密集型任务应配置尽可能小的线程，如配置Ncpu+1个线程的线程池。由于IO密集型任务线程并不是一直在执行任务，则应配置尽可能多的线程，如2*Ncpu。</p>
+<p>​    混合型的任务，如果可以拆分，将其拆分成一个CPU密集型任务和一个IO密集型任务，只要这两个任务执行的时间相差不是太大，那么分解后执行的吞吐量将高于串行执行的吞吐量。如果这两个任务执行时间相差太大，则没必要进行分解。可以通过Runtime.getRuntime().availableProcessors()方法获得当前设备的CPU个数。</p>
+<p>​    优先级不同的任务可以使用优先级队列PriorityBlockingQueue来处理。它可以让优先级高的任务先执行。</p>
+<p>​    执行时间不同的任务可以交给不同规模的线程池来处理，或者可以使用优先级队列，让执行时间短的任务先执行。</p>
+<p>​    建议使用有界队列。有界队列能增加系统的稳定性和预警能力，可以根据需要设大一点儿，比如几千。</p>
+<p>​    如果当时我们设置成无界队列，那么线程池的队列就会越来越多，有可能会撑满内存，导致整个系统不可用，而不只是后台任务出现问题。</p>
+<h1 id="AbstractQueuedSynchronizer"><a href="#AbstractQueuedSynchronizer" class="headerlink" title="AbstractQueuedSynchronizer"></a>AbstractQueuedSynchronizer</h1><h2 id="学习AQS的必要性"><a href="#学习AQS的必要性" class="headerlink" title="学习AQS的必要性"></a>学习AQS的必要性</h2><p>​    队列同步器AbstractQueuedSynchronizer（以下简称同步器或AQS），是用来构建锁或者其他同步组件的基础框架，<strong>它使用了一个int成员变量表示同步状态</strong>（state），通过内置的FIFO队列来完成资源获取线程的排队工作。并发包的大师（Doug Lea）期望它能够成为实现大部分同步需求的基础。</p>
+<h2 id="AQS使用方式和其中的设计模式"><a href="#AQS使用方式和其中的设计模式" class="headerlink" title="AQS使用方式和其中的设计模式"></a>AQS使用方式和其中的设计模式</h2><p>​    AQS的主要使用方式是继承，子类通过继承AQS并实现它的抽象方法来管理同步状态，在AQS里由一个int型的state来代表这个状态，在抽象方法的实现过程中免不了要对同步状态进行更改，这时就需要使用同步器提供的3个方法（getState()、setState(int newState)和compareAndSetState(int expect,int update)）来进行操作，因为它们能够保证状态的改变是安全的。</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/state.png" class title="state"> 
+
+<p>​    在实现上，子类推荐被定义为自定义同步组件的静态内部类，AQS自身没有实现任何同步接口，它仅仅是定义了若干同步状态获取和释放的方法来供自定义同步组件使用，同步器既可以支持独占式地获取同步状态，也可以支持共享式地获取同步状态，这样就可以方便实现不同类型的同步组件（ReentrantLock、ReentrantReadWriteLock和CountDownLatch等）。</p>
+<p>​    同步器是实现锁（也可以是任意同步组件）的关键，在锁的实现中聚合同步器。可以这样理解二者之间的关系：</p>
+<p>​    锁是面向使用者的，它定义了使用者与锁交互的接口（比如可以允许两个线程并行访问），隐藏了实现细节；</p>
+<p>​    同步器面向的是锁的实现者，它简化了锁的实现方式，屏蔽了同步状态管理、线程的排队、等待与唤醒等底层操作。锁和同步器很好地隔离了使用者和实现者所需关注的领域。</p>
+<p>​    实现者需要继承同步器并重写指定的方法，随后将同步器组合在自定义同步组件的实现中，并调用同步器提供的模板方法，而这些模板方法将会调用使用者重写的方法。</p>
+<h3 id="模板方法模式"><a href="#模板方法模式" class="headerlink" title="模板方法模式"></a>模板方法模式</h3><p>​    同步器的设计基于模板方法模式。模板方法模式的意图是，定义一个操作中的算法的骨架，而将一些步骤的实现延迟到子类中。模板方法使得子类可以不改变一个算法的结构即可重定义该算法的某些特定步骤。我们最常见的就是Spring框架里的各种Template。 </p>
+<h2 id="AQS中的方法"><a href="#AQS中的方法" class="headerlink" title="AQS中的方法"></a>AQS中的方法</h2><h3 id="模板方法"><a href="#模板方法" class="headerlink" title="模板方法"></a>模板方法</h3><p>实现自定义同步组件时，将会调用同步器提供的模板方法，</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95.png" class title="模板方法">  
+
+<p>​    这些模板方法同步器提供的模板方法基本上分为3类：独占式获取与释放同步状态、共享式获取与释放、同步状态和查询同步队列中的等待线程情况。</p>
+<h3 id="可重写的方法"><a href="#可重写的方法" class="headerlink" title="可重写的方法"></a>可重写的方法</h3><img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/%E5%8F%AF%E9%87%8D%E5%86%99%E7%9A%84%E6%96%B9%E6%B3%95.png" class title="可重写的方法">  
+
+<h3 id="访问或修改同步状态的方法"><a href="#访问或修改同步状态的方法" class="headerlink" title="访问或修改同步状态的方法"></a>访问或修改同步状态的方法</h3><p>重写同步器指定的方法时，需要使用同步器提供的如下3个方法来访问或修改同步状态。</p>
+<ul>
+<li><p>getState()：获取当前同步状态。</p>
+</li>
+<li><p>setState(int newState)：设置当前同步状态。</p>
+</li>
+<li><p>compareAndSetState(int expect,int update)：使用CAS设置当前状态，该方法能够保证状态设置的原子性。 </p>
+</li>
+</ul>
+<h2 id="CLH队列锁"><a href="#CLH队列锁" class="headerlink" title="CLH队列锁"></a>CLH队列锁</h2><p>CLH队列锁即Craig, Landin, and Hagersten (CLH) locks。</p>
+<p>CLH队列锁也是一种基于链表的可扩展、高性能、公平的自旋锁，申请线程仅仅在本地变量上自旋，它不断轮询前驱的状态，假设发现前驱释放了锁就结束自旋。</p>
+<p>当一个线程需要获取锁时：</p>
+<ol>
+<li><p>创建一个的QNode，将其中的locked设置为true表示需要获取锁，myPred表示对其前驱结点的引用</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/CLH%E9%98%9F%E5%88%97%E9%94%811.png" class title="CLH队列锁1">   
+</li>
+<li><p>线程A对tail域调用getAndSet方法，使自己成为队列的尾部，同时获取一个指向其前驱结点的引用myPred</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/CLH%E9%98%9F%E5%88%97%E9%94%812.png" class title="CLH队列锁2">   
+
+<p>线程B需要获得锁，同样的流程再来一遍</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/CLH%E9%98%9F%E5%88%97%E9%94%813.png" class title="CLH队列锁3">   
+
+</li>
+</ol>
+<p>3.线程就在前驱结点的locked字段上旋转，直到前驱结点释放锁(前驱节点的锁值 locked == false)</p>
+<p>4.当一个线程需要释放锁时，将当前结点的locked域设置为false，同时回收前驱结点</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/CLH%E9%98%9F%E5%88%97%E9%94%814.png" class title="CLH队列锁4">   
+
+<p>​    如上图所示，前驱结点释放锁，线程A的myPred所指向的前驱结点的locked字段变为false，线程A就可以获取到锁。</p>
+<p>​    CLH队列锁的优点是空间复杂度低（如果有n个线程，L个锁，每个线程每次只获取一个锁，那么需要的存储空间是O（L+n），n个线程有n个myNode，L个锁有L个tail）。CLH队列锁常用在SMP体系结构下。</p>
+<p>​    Java中的AQS是CLH队列锁的一种变体实现。</p>
+<h1 id="深入理解并发编程和归纳总结"><a href="#深入理解并发编程和归纳总结" class="headerlink" title="深入理解并发编程和归纳总结"></a>深入理解并发编程和归纳总结</h1><h2 id="JMM基础-计算机原理"><a href="#JMM基础-计算机原理" class="headerlink" title="JMM基础-计算机原理"></a>JMM基础-计算机原理</h2><p>​    Java内存模型即Java Memory Model，简称JMM。JMM定义了Java 虚拟机(JVM)在计算机内存(RAM)中的工作方式。JVM是整个计算机虚拟模型，所以JMM是隶属于JVM的。Java1.5版本对其进行了重构，现在的Java仍沿用了Java1.5的版本。Jmm遇到的问题与现代计算机中遇到的问题是差不多的。</p>
+<p>​    物理计算机中的并发问题，物理机遇到的并发问题与虚拟机中的情况有不少相似之处，物理机对并发的处理方案对于虚拟机的实现也有相当大的参考意义。</p>
+<p>​    计算机在做一些我们平时的基本操作时，需要的响应时间是不一样的。</p>
+<p>​    现实情况中绝大多数的运算任务都不可能只靠处理器“计算”就能完成，处理器至少要与内存交互，如读取运算数据、存储运算结果等，这个I/O操作是基本上是无法消除的（无法仅靠寄存器来完成所有运算任务）。早期计算机中cpu和内存的速度是差不多的，但在现代计算机中，<strong>cpu的指令速度远超内存的存取速度</strong>,由于计算机的存储设备与处理器的运算速度有几个数量级的差距，所以现代计算机系统都不得不加入一层读写速度尽可能接近处理器运算速度的高速缓存（Cache）来作为内存与处理器之间的缓冲：将运算需要使用到的数据复制到缓存中，让运算能快速进行，当运算结束后再从缓存同步回内存之中，这样处理器就无须等待缓慢的内存读写了。</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/%E8%AE%A1%E7%AE%97%E6%9C%BA%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B.png" class title="计算机内存模型">   
+
+<h2 id="Java内存模型（JMM）"><a href="#Java内存模型（JMM）" class="headerlink" title="Java内存模型（JMM）"></a>Java内存模型（JMM）</h2><p>​    从抽象的角度来看，JMM定义了线程和主内存之间的抽象关系：线程之间的共享变量存储在主内存（Main Memory）中，每个线程都有一个<strong>私有的本地内存（Local Memory）</strong>，本地内存中存储了该线程以读/写共享变量的副本。本地内存是JMM的一个抽象概念，并不真实存在。它涵盖了缓存、写缓冲区、寄存器以及其他的硬件和编译器优化。</p>
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/JMM1.png" class title="JMM1">    
+
+<img src="/2020/11/30/%E5%B9%B6%E5%8F%91%E7%BC%96%E7%A8%8B/JMM2.png" class title="JMM2">     
+
+<h3 id="可见性"><a href="#可见性" class="headerlink" title="可见性"></a>可见性</h3><p>​    可见性是指当多个线程访问同一个变量时，一个线程修改了这个变量的值，其他线程能够立即看得到修改的值。</p>
+<p>​    由于线程对变量的所有操作都必须在工作内存中进行，而不能直接读写主内存中的变量，那么对于共享变量V，它们首先是在自己的工作内存，之后再同步到主内存。可是并不会及时的刷到主存中，而是会有一定时间差。很明显，这个时候线程 A 对变量 V 的操作对于线程 B 而言就不具备可见性了 。</p>
+<p>​    要解决共享对象可见性这个问题，我们可以使用volatile关键字或者是加锁。</p>
+<h3 id="原子性"><a href="#原子性" class="headerlink" title="原子性"></a>原子性</h3><p>​    原子性：即一个操作或者多个操作 要么全部执行并且执行的过程不会被任何因素打断，要么就都不执行。</p>
+<p>​    我们都知道CPU资源的分配都是以线程为单位的,并且是分时调用,操作系统允许某个进程执行一小段时间，例如 50 毫秒，过了 50 毫秒操作系统就会重新选择一个进程来执行（我们称为“任务切换”），这个 50 毫秒称为“时间片”。而任务的切换大多数是在时间片段结束以后。</p>
+<p>​    那么线程切换为什么会带来bug呢？因为操作系统做任务切换，可以发生在任何一条CPU 指令执行完！注意，是 CPU 指令，CPU 指令，CPU 指令，而不是高级语言里的一条语句。比如count++，在java里就是一句话，但高级语言里一条语句往往需要多条 CPU 指令完成。其实count++包含了三个CPU指令！</p>
+<h2 id="volatile详解"><a href="#volatile详解" class="headerlink" title="volatile详解"></a>volatile详解</h2><h3 id="volatile特性"><a href="#volatile特性" class="headerlink" title="volatile特性"></a>volatile特性</h3><p>​    可以把对volatile变量的单个读/写，看成是使用同一个锁对这些单个读/写操作做了同步 </p>
+<p>​    所以volatile变量自身具有下列特性：</p>
+<ul>
+<li><p>可见性：对一个volatile变量的读，总是能看到（任意线程）对这个volatile变量最后的写入。</p>
+</li>
+<li><p>原子性：对任意单个volatile变量的读/写具有原子性，但类似于volatile++这种复合操作不具有原子性。</p>
+</li>
+</ul>
+<p>​    volatile虽然能保证执行完及时把变量刷到主内存中，但对于count++这种非原子性、多指令的情况，由于线程切换，线程A刚把count=0加载到工作内存，线程B就可以开始工作了，这样就会导致线程A和B执行完的结果都是1，都写到主内存中，主内存的值还是1不是2</p>
+<h3 id="volatile的实现原理"><a href="#volatile的实现原理" class="headerlink" title="volatile的实现原理"></a>volatile的实现原理</h3><p>​    通过对OpenJDK中的unsafe.cpp源码的分析，会发现被volatile关键字修饰的变量会存在一个“lock:”的前缀。</p>
+<p>​    Lock前缀，Lock不是一种内存屏障，但是它能完成类似内存屏障的功能。Lock会对CPU总线和高速缓存加锁，可以理解为CPU指令级的一种锁。</p>
+<p>​    同时该指令会将当前处理器缓存行的数据直接写会到系统内存中，且这个写回内存的操作会使在其他CPU里缓存了该地址的数据无效。</p>
+<h2 id="ReentrantLock的实现"><a href="#ReentrantLock的实现" class="headerlink" title="ReentrantLock的实现"></a>ReentrantLock的实现</h2><h3 id="锁的可重入"><a href="#锁的可重入" class="headerlink" title="锁的可重入"></a>锁的可重入</h3><p>重入是指任意线程在获取到锁之后能够再次获取该锁而不会被锁所阻塞，该特性的实现需要解决以下两个问题。</p>
+<p>1）线程再次获取锁。锁需要去识别获取锁的线程是否为当前占据锁的线程，如果是，则再次成功获取。</p>
+<p>2）锁的最终释放。线程重复n次获取了锁，随后在第n次释放该锁后，其他线程能够获取到该锁。锁的最终释放要求锁对于获取进行计数自增，计数表示当前锁被重复获取的次数，而锁被释放时，计数自减，当计数等于0时表示锁已经成功释放。</p>
+<p>​    nonfairTryAcquire方法增加了再次获取同步状态的处理逻辑：通过判断当前线程是否为获取锁的线程来决定获取操作是否成功，如果是获取锁的线程再次请求，则将同步状态值进行增加并返回true，表示获取同步状态成功。同步状态表示锁被一个线程重复获取的次数。</p>
+<p>​    如果该锁被获取了n次，那么前(n-1)次tryRelease(int releases)方法必须返回false，而只有同步状态完全释放了，才能返回true。可以看到，该方法将同步状态是否为0作为最终释放的条件，当同步状态为0时，将占有线程设置为null，并返回true，表示释放成功。</p>
+<h3 id="公平和非公平锁"><a href="#公平和非公平锁" class="headerlink" title="公平和非公平锁"></a>公平和非公平锁</h3><p>​    ReentrantLock的构造函数中，默认的无参构造函数将会把Sync对象创建为NonfairSync对象，这是一个“非公平锁”；而另一个构造函数ReentrantLock(boolean fair)传入参数为true时将会把Sync对象创建为“公平锁”FairSync。</p>
+<p>​    nonfairTryAcquire(int acquires)方法，对于非公平锁，只要CAS设置同步状态成功，则表示当前线程获取了锁，而公平锁则不同。    tryAcquire方法，该方法与nonfairTryAcquire(int acquires)比较，唯一不同的位置为判断条件多了hasQueuedPredecessors()方法，即加入了同步队列中当前节点是否有前驱节点的判断，如果该方法返回true，则表示有线程比当前线程更早地请求获取锁，因此需要等待前驱线程获取并释放锁之后才能继续获取锁。</p>
+<h2 id="synchronized的实现原理"><a href="#synchronized的实现原理" class="headerlink" title="synchronized的实现原理"></a>synchronized的实现原理</h2><p>​    Synchronized在JVM里的实现都是基于进入和退出Monitor对象来实现方法同步和代码块同步，虽然具体实现细节不一样，但是都可以通过成对的MonitorEnter和MonitorExit指令来实现。</p>
+<p>​    对同步块，MonitorEnter指令插入在同步代码块的开始位置，当代码执行到该指令时，将会尝试获取该对象Monitor的所有权，即尝试获得该对象的锁，而monitorExit指令则插入在方法结束处和异常处，JVM保证每个MonitorEnter必须有对应的MonitorExit。</p>
+<p>​    对同步方法，从同步方法反编译的结果来看，方法的同步并没有通过指令monitorenter和monitorexit来实现，相对于普通方法，其常量池中多了<strong>ACC_SYNCHRONIZED标示符</strong>。</p>
+<p>​    JVM就是根据该标示符来实现方法的同步的：当方法被调用时，调用指令将会检查方法的 ACC_SYNCHRONIZED 访问标志是否被设置，如果设置了，执行线程将先获取monitor，获取成功之后才能执行方法体，方法执行完后再释放monitor。在方法执行期间，其他任何线程都无法再获得同一个monitor对象。</p>
+<h3 id="了解各种锁"><a href="#了解各种锁" class="headerlink" title="了解各种锁"></a>了解各种锁</h3><h4 id="自旋锁"><a href="#自旋锁" class="headerlink" title="自旋锁"></a>自旋锁</h4><h5 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h5><p>​    自旋锁原理非常简单，如果持有锁的线程能在很短时间内释放锁资源，那么那些等待竞争锁的线程就不需要做内核态和用户态之间的切换进入阻塞挂起状态，它们只需要等一等（自旋），等持有锁的线程释放锁后即可立即获取锁，这样就避免用户线程和内核的切换的消耗。</p>
+<p>​    但是线程自旋是需要消耗CPU的，说白了就是让CPU在做无用功，线程不能一直占用CPU自旋做无用功，所以需要设定一个自旋等待的最大时间。</p>
+<p>​    如果持有锁的线程执行的时间超过自旋等待的最大时间扔没有释放锁，就会导致其它争用锁的线程在最大等待时间内还是获取不到锁，这时争用线程会停止自旋进入阻塞状态。</p>
+<h5 id="自旋锁的优缺点"><a href="#自旋锁的优缺点" class="headerlink" title="自旋锁的优缺点"></a>自旋锁的优缺点</h5><p>​    自旋锁尽可能的减少线程的阻塞，这对于锁的竞争不激烈，且占用锁时间非常短的代码块来说性能能大幅度的提升，因为自旋的消耗会小于线程阻塞挂起操作的消耗！</p>
+<p>​    但是如果锁的竞争激烈，或者持有锁的线程需要长时间占用锁执行同步块，这时候就不适合使用自旋锁了，因为自旋锁在获取锁前一直都是占用cpu做无用功，占着XX不XX，线程自旋的消耗大于线程阻塞挂起操作的消耗，其它需要cup的线程又不能获取到cpu，造成cpu的浪费。</p>
+<h5 id="自旋锁时间阈值"><a href="#自旋锁时间阈值" class="headerlink" title="自旋锁时间阈值"></a>自旋锁时间阈值</h5><p>​    自旋锁的目的是为了占着CPU的资源不释放，等到获取到锁立即进行处理。但是如何去选择自旋的执行时间呢？如果自旋执行时间太长，会有大量的线程处于自旋状态占用CPU资源，进而会影响整体系统的性能。因此自旋次数很重要</p>
+<p>​    JVM对于自旋次数的选择，jdk1.5默认为10次，在1.6引入了适应性自旋锁，适应性自旋锁意味着自旋的时间不在是固定的了，而是由前一次在同一个锁上的自旋时间以及锁的拥有者的状态来决定，基本认为一个线程上下文切换的时间是最佳的一个时间。</p>
+<p>​    JDK1.6中-XX:+UseSpinning开启自旋锁； JDK1.7后，去掉此参数，由jvm控制；</p>
+<h3 id="锁的状态"><a href="#锁的状态" class="headerlink" title="锁的状态"></a>锁的状态</h3><p>​    一共有四种状态，<strong><em>无锁状态，偏向锁状态，轻量级锁状态和重量级锁状态</em></strong>，它会随着竞争情况逐渐升级。锁可以升级但不能降级，目的是为了提高获得锁和释放锁的效率。</p>
+<h4 id="偏向锁"><a href="#偏向锁" class="headerlink" title="偏向锁"></a>偏向锁</h4><p>​    引入背景：大多数情况下锁不仅不存在多线程竞争，而且总是由同一线程多次获得，为了让线程获得锁的代价更低而引入了偏向锁，减少不必要的CAS操作。</p>
+<p>​    偏向锁，顾名思义，它会偏向于第一个访问锁的线程，如果在运行过程中，同步锁只有一个线程访问，不存在多线程争用的情况，则线程是不需要触发同步的，减少加锁／解锁的一些CAS操作（比如等待队列的一些CAS操作），这种情况下，就会给线程加一个偏向锁。 如果在运行过程中，遇到了其他线程抢占锁，则持有偏向锁的线程会被挂起，JVM会消除它身上的偏向锁，将锁恢复到标准的轻量级锁。它通过消除资源无竞争情况下的同步原语，进一步提高了程序的运行性能。</p>
+<p>偏向锁获取过程：</p>
+<p>步骤1、 访问Mark Word中偏向锁的标识是否设置成1，锁标志位是否为01，确认为可偏向状态。</p>
+<p>步骤2、 如果为可偏向状态，则测试线程ID是否指向当前线程，如果是，进入步骤5，否则进入步骤3。</p>
+<p>步骤3、 如果线程ID并未指向当前线程，则通过CAS操作竞争锁。如果竞争成功，则将Mark Word中线程ID设置为当前线程ID，然后执行5；如果竞争失败，执行4。</p>
+<p>步骤4、 如果CAS获取偏向锁失败，则表示有竞争。当到达全局安全点（safepoint）时获得偏向锁的线程被挂起，偏向锁升级为轻量级锁，然后被阻塞在安全点的线程继续往下执行同步代码。（撤销偏向锁的时候会导致stop the word）</p>
+<p>步骤5、 执行同步代码。</p>
 ]]></content>
   </entry>
   <entry>
-    <title>java虚拟机</title>
-    <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
-    <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
-<p>​    从这里可以得出结论，JVM的作用就是一个翻译官，把字节码文件翻译为机器语言。</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B.png" class title="整体流程">
-
-
-
-<h2 id="1-JVM特性"><a href="#1-JVM特性" class="headerlink" title="1. JVM特性"></a>1. JVM特性</h2><ul>
-<li><p>跨平台</p>
-<p>跨平台体现在Java一份代码能在各种操作系统上运行，这是因为jdk有不同的版本，能处理不同的操作系统。</p>
-</li>
-<li><p>跨语言</p>
-<p>​    跨语言体现在许多其它语言，如kotlin、groovy等都能在JVM上运行，原因是这些语言最终都被编译为字节码，JVM能够识别并处理。</p>
-</li>
-</ul>
-<h2 id="2-运行时数据区"><a href="#2-运行时数据区" class="headerlink" title="2. 运行时数据区"></a>2. 运行时数据区</h2><p>​    运行时数据区内部也分为了五个部分，其中虚拟机栈，程序计数器，本地方法栈为线程私有，即每个线程单独都有一份，而堆和方法区为线程共享，所有线程都可以共享其中的数据。</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E6%97%B6%E6%95%B0%E6%8D%AE%E5%8C%BA.png" class title="运行时数据区">
-
-
-
-<h2 id="3-每个部分详细"><a href="#3-每个部分详细" class="headerlink" title="3.每个部分详细"></a>3.每个部分详细</h2><h3 id="3-1-程序计数器"><a href="#3-1-程序计数器" class="headerlink" title="3.1 程序计数器"></a>3.1 程序计数器</h3><ul>
-<li><p>为什么要有程序计数器？</p>
-<p>​    由于 Java 是多线程语言，当执行的线程数量超过 CPU 核数时，线程之间会根据时间片轮询争夺 CPU 资源。如果一个线程的时间片用完了，或者是其它原因导致这个线程的 CPU 资源被提前抢夺，那么这个退出的线程就需要单独的一个程序计数器，来记录下一条运行的指令。</p>
-<p>​    因为操作系统的时间片轮转机制，方法在运行时可能会因为上下文切换导致中止运行，这时候程序计数器需要记录方法中止时运行到的位置，存下当前字节码指令的地址，在再次开始运行时找到上一次中止运行时的位置。</p>
-</li>
-<li><p>程序计数器是JVM中唯一不会OOM的</p>
-<p>​    因为程序计数器的内存非常小，而一般默认一个虚拟机栈是1M大小，一个虚拟机栈内程序计数器再多也无法达到1M。</p>
-</li>
-</ul>
-<h3 id="3-2-虚拟机栈"><a href="#3-2-虚拟机栈" class="headerlink" title="3.2 虚拟机栈"></a>3.2 虚拟机栈</h3><p>​    虚拟机栈是用于管理一个线程当中的方法的，每有一个方法执行，就会把封装有这个方法信息的栈帧压入虚拟机栈，执行结束后就会把对应栈帧出栈。（就类似于虚拟机栈是一个弹夹，栈帧是子弹）</p>
-<p>​    栈帧结构：</p>
-<ul>
-<li>局部变量表：用于存储八种基本变量类型</li>
-<li>操作数栈：在函数执行过程中存放一些中间变量</li>
-<li>动态链接：一般在java多态时，如一个接口的两个实现类，调用重写的同一个方法，用动态链接去区分调用了哪一个方法</li>
-<li>完成出口：用于存储函数返回值。<strong>（正常返回：程序计数器指向的地址，异常返回：通过异常处理器表确定）</strong></li>
-</ul>
-<h3 id="3-3-本地方法栈"><a href="#3-3-本地方法栈" class="headerlink" title="3.3 本地方法栈"></a>3.3 本地方法栈</h3><p>​    虚拟机栈是管理java方法，而本地方法栈是管理native方法，当JVM调用到native方法时，不会将其打包成栈帧入虚拟机栈，而是利用动态链接将其交给操作系统执行。</p>
-<p>​    <strong>HotSpot直接把本地方法栈和虚拟机栈合二为一</strong></p>
-<h3 id="3-4-方法区"><a href="#3-4-方法区" class="headerlink" title="3.4 方法区"></a>3.4 方法区</h3><p>​    方法区存储<strong>常量、静态变量、类信息、即时编译期编译后的内容</strong>。</p>
-<p>​    java1.8之后，运行时常量池中的<strong>字符串</strong>都被放入堆区。</p>
-<p>​    Java1.8以前：永久代是方法区的一种实现。</p>
-<p>​    java1.8以后：用元空间代替永久代。</p>
-<ul>
-<li><p>缺点：容易发生内存溢出，因为GC时回收率偏低，效率低。</p>
-<p>移除永久代是为了融合 HotSpot JVM 与 JRockit VM 而做出的努力，因为 JRockit 没有永久代，所以不需要配置永久代。</p>
-</li>
-</ul>
-<h3 id="3-5-堆"><a href="#3-5-堆" class="headerlink" title="3.5 堆"></a>3.5 堆</h3><p>​    java中的几乎全部对象，以及数组，都是分配在堆中的，他，他们的引用是存储在局部变量表中。</p>
-<h2 id="4-直接内存（堆外内存）"><a href="#4-直接内存（堆外内存）" class="headerlink" title="4. 直接内存（堆外内存）"></a>4. 直接内存（堆外内存）</h2><p>​    除了JVM的栈和堆以外，还有一个不被JVM管理的内存区域，当使用了NIO时会用到，其大小不受虚拟机大小影响，但是受本机总内存大小限制。</p>
-<h2 id="5-从底层深入理解运行时数据区"><a href="#5-从底层深入理解运行时数据区" class="headerlink" title="5.从底层深入理解运行时数据区"></a>5.从底层深入理解运行时数据区</h2><p>运行如下程序：</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/code.png" class title="code">
-
-<p>JVM处理过程如下：</p>
-<ul>
-<li>JVM 向操作系统申请内存，JVM 第一步就是通过配置参数或者默认配置参数向操作系统申请内存空间</li>
-<li>JVM 获得内存空间后，会根据配置参数分配堆、栈以及方法区的内存大小</li>
-<li>完成上一个步骤后， JVM 首先会执行构造器，编译器会在.java 文件被编译成.class 文件时，收集所有类的初始化代码，包括静态变量赋值语句、静态代码块、静态方法，静态变量和常量放入方法区</li>
-<li>执行方法。启动 main 线程，执行 main 方法，开始执行第一行代码。此时堆内存中会创建一个 Teacher 对象，对象引用 student 就存放在栈中。执行其他方法时，具体的操作：栈帧执行对内存区域的影响</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E8%BF%87%E7%A8%8B.png" class title="运行过程">
-
-
-
-<p><strong>堆中的内存分配是连续的，且栈内存远小于堆内存。</strong></p>
-<h2 id="6-内存溢出"><a href="#6-内存溢出" class="headerlink" title="6. 内存溢出"></a>6. 内存溢出</h2><h3 id="6-1-栈溢出"><a href="#6-1-栈溢出" class="headerlink" title="6.1 栈溢出"></a>6.1 栈溢出</h3><ul>
-<li>stackOverFlow：当栈帧数量过多，加起来大于虚拟机栈的1M内存空间时，报stackOverFlow</li>
-<li>outOfMemory：当线程数量过多，虚拟机栈数量就过多，加起来大于操作系统分配空间时，报OOM。</li>
-</ul>
-<h3 id="6-2-方法区溢出"><a href="#6-2-方法区溢出" class="headerlink" title="6.2 方法区溢出"></a>6.2 方法区溢出</h3><ul>
-<li>运行时常量池溢出</li>
-<li>方法区中保存的Class对象没有被及时回收掉或者Class信息占用的内存超过了我们配置。</li>
-</ul>
-<p>两者都为OOM</p>
-<p><strong><em>注意Class要被回收，条件比较苛刻（仅仅是可以，不代表必然，因为还有一些参数可以进行控制）：</em></strong></p>
-<ul>
-<li><p>该类所有的实例都已经被回收，也就是堆中不存在该类的任何实例</p>
-</li>
-<li><p>加载该类的ClassLoader已经被回收</p>
-</li>
-<li><p>该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法</p>
-</li>
-</ul>
-<h3 id="6-3-堆溢出"><a href="#6-3-堆溢出" class="headerlink" title="6.3 堆溢出"></a>6.3 堆溢出</h3><p>​    当创建对象大小大于堆内存空间，或者创建对象过多，且都为存活对象时，报OOM。</p>
-<h3 id="6-4-本地内存溢出"><a href="#6-4-本地内存溢出" class="headerlink" title="6.4 本地内存溢出"></a>6.4 本地内存溢出</h3><p>​    使用NIO时使用大小超过本地内存，也为OOM。</p>
-<h2 id="7-虚拟机优化技术"><a href="#7-虚拟机优化技术" class="headerlink" title="7. 虚拟机优化技术"></a>7. 虚拟机优化技术</h2><ul>
-<li><p>编译优化——内联函数：将传入参数已经确定的函数直接拆开放入调用位置，避免真实的方法调用</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E8%81%94%E5%87%BD%E6%95%B0.png" class title="内联函数">
-</li>
-<li><p>栈优化——栈帧之间的数据共享：调用方的操作数栈和被调用方的局部变量表共享，减小操作空间的同时也减少了一些复制操作</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%A0%88%E4%BC%98%E5%8C%96.png" class title="栈优化">
-
-</li>
-</ul>
-<h1 id="二、虚拟机中的对象"><a href="#二、虚拟机中的对象" class="headerlink" title="二、虚拟机中的对象"></a>二、虚拟机中的对象</h1><h2 id="1-对象分配"><a href="#1-对象分配" class="headerlink" title="1. 对象分配"></a>1. 对象分配</h2><ul>
-<li>首先通过类加载，传入JVM</li>
-<li>JVM进行对象检查，检查对象是否已经被类加载器加载完毕，如果未加载完毕，就返回到类加载器处重新加载</li>
-<li>检查通过后，就开始内存分配</li>
-<li>内存空间初始化</li>
-<li>设置（设置对象的对象头的一些参数）</li>
-<li>对象初始化（构造函数执行）</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA.png" class title="对象创建">
-
-
-
-<h3 id="1-1-对象的内存布局"><a href="#1-1-对象的内存布局" class="headerlink" title="1.1 对象的内存布局"></a>1.1 对象的内存布局</h3><ul>
-<li>对象头：对象头包含了<strong>Mark Word 、类型指针、对象数组长度</strong>这三个部分。（其中数组长度只有在是数组对象时才会存在）</li>
-<li>实例数据</li>
-<li>对齐填充：作用为将对象大小补齐为字节的倍数，如对象头和实例数据加起来为30位，就需要对齐填充2位</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80.png" class title="对象内存布局">
-
-
-
-<h3 id="1-2-内存分配"><a href="#1-2-内存分配" class="headerlink" title="1.2 内存分配"></a>1.2 内存分配</h3><ul>
-<li><p>划分内存的方法：如堆中内存空间整齐，采用指针碰撞（指针依次向后移动），如不整齐，采用空闲列表，记录每个位置是否已经存放对象</p>
-</li>
-<li><p>并发安全：<strong>CAS机制</strong>，如果有线程在访问，就自旋等待，再次访问时如访问位置不为空闲，就去访问下一个位置。或者采用<strong>本地线程缓存（TLAB）</strong>，在Eden区中划分一个内存大小为Eden百分之一的TLAB区，把每个线程对应的对象数据放入TLAB区，类似于ThreadLocal</p>
-</li>
-<li><p>堆中内存区域：</p>
-<ul>
-<li>新生代：占堆的三分之一大小，又细分为Eden，From，To三个区，内存比例为8：1：1，因为经过大数据调查显示，对象进入Eden区第一次GC，百分之九十都会被回收，而为了避免From或者To内存溢出，只有一半是有效内存</li>
-<li>老年代：占堆的三分之二大小</li>
-<li>新生代和老年代有着各自的垃圾回收器，新生代为Minor GC，老年代为Major GC，或者全局的Full GC</li>
-</ul>
-</li>
-<li><p>具体内存分配过程：</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D.png" class title="内存分配">
-
-<p>(1)优先进行逃逸分析，判断对象是否可以在栈中分配（如对象只存在于一个方法体中，没有其他方法调用，没有其他线程调用，就可以分配在栈中，因为对象会随着栈帧的出栈而回收）。</p>
-<p>(2)无法分配到栈中的对象就送入堆中，如果为大对象，直接存入老年代,如果不为大对象，但是采用了本地线程缓存，就存入TLAB区，如果都不满足，就存入Eden区的其余位置。</p>
-<p>(3)放入Eden区中的对象，在GC时，没有被回收的对象将会放入From区，再次GC还未被回收的对象就送入To区，一直来回存放，目的是避免From区和To区内存溢出，每进行一次GC，就把未回收的对象放入空的区中，将不为空的区全部回收，下一次继续进行这样的操作。存活的对象每进行一次位置转移，就把对象头中的age信息加一，age为四位，最大为15，所以在15次GC后要是对象还存活，就放入老年代。但是有一个例外，JVM为了防止From区和To区内存不足，如果GC时几个对象加起来大小很大，就直接放入老年代，无需等到age达到15，这个称为<strong>对象动态年龄判定</strong>。</p>
-<p>(4)为了保证老年代内存空间不溢出，JVM会在每一次有对象进入老年代时进行一次老年代GC，但是这样做很消耗内存，所以有一个<strong>空间分配担保</strong>，对象放入老年代时先不进行垃圾回收，如果老年代内存不够用了，再进行垃圾回收。还有一种<strong>空间分配担保</strong>，就是当From或者To区放不下时，让对象直接进入老年区。</p>
-</li>
-<li><p>内存分配的规则</p>
-<ul>
-<li>对象优先在Eden区分配</li>
-<li>大对象直接分配到老年代</li>
-<li>空间分配担保</li>
-<li>长期存活对象进入老年代</li>
-<li>对象年龄动态判定</li>
-</ul>
-</li>
-<li><p>优化： 本地线程缓冲（TLAB）</p>
-</li>
-</ul>
-<h3 id="1-3-内存空间初始化"><a href="#1-3-内存空间初始化" class="headerlink" title="1.3 内存空间初始化"></a>1.3 内存空间初始化</h3><p>​    内存分配完成后，虚拟机需要将分配到的内存空间都初始化为零值(如int值为0，boolean值为false等等)。这一步操作保证了对象的实例字段在Java代码中可以不赋初始值就直接使用，程序能访问到这些字段的数据类型所对应的零值。</p>
-<h2 id="2-对象访问定位"><a href="#2-对象访问定位" class="headerlink" title="2. 对象访问定位"></a>2. 对象访问定位</h2><ul>
-<li><p>句柄访问：每个对象的引用持有一个句柄，句柄中存放了到对象实例数据、对象类型数据的指针</p>
-</li>
-<li><p>直接指针访问：每个对象的的引用直接持有对象实例数据，还有对象类型指针</p>
-</li>
-<li><p>对比：</p>
-<p>优点：句柄访问可以在对象实例位置发生改变时不用重新分配引用的指针，直接指针访问可以只进行一次指针访问，速度快，效率高。</p>
-<p>缺点：句柄访问要进行两次指针访问，效率低，速度慢，直接指针访问在对象实例位置发生改变时需要重新定位。</p>
-</li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E8%AE%BF%E9%97%AE%E5%AE%9A%E4%BD%8D.png" class title="对象访问定位">
-
-
-
-<h2 id="3-对象存活判断"><a href="#3-对象存活判断" class="headerlink" title="3. 对象存活判断"></a>3. 对象存活判断</h2><ul>
-<li>引用计数算法（无法解决对象互相引用的问题）：JVM维护一个变量，每创建一个对象就加一，回收一个就减一，直到为0就是全部回收完毕</li>
-<li>可达性分析：JVM将一些特别的对象（静态变量、常量池、虚拟机栈中引用的对象、JNI指针等等），定义为GC Root，当持有引用时就建立了关联，只要对象到GC Root之间有一条有关联的道路，就判断为对象存活</li>
-<li>但是不是经历了可达性分析不存活的对象就一定会被回收，在第一次可达性分析要被回收后，会进行一次筛选，如果类内部重写了finalized方法，就会执行一次此方法，可以在这个方法中自行救活对象，但是第二次回收就会直接回收。<strong>注意：finalized方法优先级很低，所以不建议使用</strong></li>
-</ul>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%AD%98%E6%B4%BB.png" class title="对象存活">
-
-
-
-<h2 id="4-各种引用"><a href="#4-各种引用" class="headerlink" title="4. 各种引用"></a>4. 各种引用</h2><ul>
-<li><p>强引用：用 = 创建的对象，无论如何都不会被回收</p>
-</li>
-<li><p>软引用（softReference）：在JVM发生OOM时GC才会被回收</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-1.png" class title="软引用-1">
-
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-2.png" class title="软引用-2">
-</li>
-<li><p>弱引用（WeakReference）：在GC时就会回收</p>
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-1.png" class title="弱引用-1">
-
-<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-2.png" class title="弱引用-2">
-</li>
-<li><p>虚引用：随时都会被回收，唯一作用就是监视垃圾回收器是否正常运行</p>
-</li>
-<li><p><strong><em>注意：</em></strong>软引用和弱引用，可以用在内存资源紧张的情况下以及创建不是很重要的数据缓存。当系统内存不足的时候，缓存中的内容是可以被释放（比如图片缓存）。实际运用（WeakHashMap、ThreadLocal）</p>
-</li>
-</ul>
-<h1 id="三、-垃圾回收器"><a href="#三、-垃圾回收器" class="headerlink" title="三、 垃圾回收器"></a>三、 垃圾回收器</h1><h2 id="1-垃圾回收算法"><a href="#1-垃圾回收算法" class="headerlink" title="1.垃圾回收算法"></a>1.垃圾回收算法</h2><h3 id="1-1-复制算法（Copying）"><a href="#1-1-复制算法（Copying）" class="headerlink" title="1.1 复制算法（Copying）"></a>1.1 复制算法（Copying）</h3><p>​    将可用内存按容量划分为大小相等的两块，每次只使用其中的一块。当这一块的内存用完了，就将还存活着的对象复制到另外一块上面，然后再把已使用过的内存空间一次清理掉。这样使得每次都是对整个半区进行内存回收，内存分配时也就不用考虑内存碎片等复杂情况，只要按顺序分配内存即可，实现简单，运行高效。只是这种算法的代价是将内存缩小为了原来的一半。</p>
-<p>​    专门研究表明，新生代中的对象98%是“朝生夕死”的，所以并不需要按照1:1的比例来划分内存空间，而是将内存分为一块较大的Eden空间和两块较小的Survivor空间，每次使用Eden和其中一块Survivor[1]。当回收时，将Eden和Survivor中还存活着的对象一次性地复制到另外一块Survivor空间上，最后清理掉Eden和刚才用过的Survivor空间。（分代收集理论）</p>
-<p>​    HotSpot虚拟机默认Eden和Survivor的大小比例是8:1，也就是每次新生代中可用内存空间为整个新生代容量的90%（80%+10%），只有10%的内存会被“浪费”。当然，98%的对象可回收只是一般场景下的数据，我们没有办法保证每次回收都只有不多于10%的对象存活，当Survivor空间不够用时，需要依赖其他内存（这里指老年代）进行分配担保（Handle Promotion）</p>
-<h3 id="1-2-标记-清除算法（Mark-Sweep）"><a href="#1-2-标记-清除算法（Mark-Sweep）" class="headerlink" title="1.2 标记-清除算法（Mark-Sweep）"></a>1.2 标记-清除算法（Mark-Sweep）</h3><p>​    算法分为“标记”和“清除”两个阶段：首先标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。它的主要不足空间问题，标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程序运行过程中需要分配较大对象时，无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。</p>
-<h3 id="1-3-标记-整理算法（Mark-Compact）"><a href="#1-3-标记-整理算法（Mark-Compact）" class="headerlink" title="1.3 标记-整理算法（Mark-Compact）"></a>1.3 标记-整理算法（Mark-Compact）</h3><p>​    首先标记出所有需要回收的对象，在标记完成后，后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。标记整理算法虽然没有内存碎片，但是效率偏低。</p>
-<h2 id="2-JVM中常见的垃圾收集器"><a href="#2-JVM中常见的垃圾收集器" class="headerlink" title="2. JVM中常见的垃圾收集器"></a>2. JVM中常见的垃圾收集器</h2><h3 id="2-1-分代收集的思想"><a href="#2-1-分代收集的思想" class="headerlink" title="2.1 分代收集的思想"></a>2.1 分代收集的思想</h3><p>​    在新生代中，每次垃圾收集时都发现有大批对象死去，只有少量存活，那就选用复制算法，只需要付出少量存活对象的复制成本就可以完成收集。</p>
-<p>​    而老年代中因为对象存活率高、没有额外空间对它进行分配担保，就必须使用“标记—清理”或者“标记—整理”算法来进行回收。</p>
-<p>​    <strong>请记住下图的垃圾收集器和之间的连线关系。</strong></p>
-
-
-
-
-<table>
-<thead>
-<tr>
-<th align="center"><strong><em>收集器</em></strong></th>
-<th><strong><em>收集对象和算法</em></strong></th>
-<th><strong><em>收集器类型</em></strong></th>
-<th><strong><em>说明</em></strong></th>
-<th><strong><em>适用场景</em></strong></th>
-</tr>
-</thead>
-<tbody><tr>
-<td align="center">Serial</td>
-<td>新生代，复制算法</td>
-<td>单线程</td>
-<td></td>
-<td>简单高效；适合内存不大的情况；</td>
-</tr>
-<tr>
-<td align="center">ParNew</td>
-<td>新生代，复制算法</td>
-<td>并行的多线程收集器</td>
-<td>ParNew垃圾收集器是Serial收集器的多线程版本</td>
-<td>搭配CMS垃圾回收器的首选</td>
-</tr>
-<tr>
-<td align="center">Parallel Scavenge吞吐量优先收集器</td>
-<td>新生代，复制算法</td>
-<td>并行的多线程收集器</td>
-<td>类似ParNew，更加关注吞吐量，达到一个可控制的吞吐量；</td>
-<td>本身是Server级别多CPU机器上的默认GC方式，主要适合后台运算不需要太多交互的任务；</td>
-</tr>
-</tbody></table>
-<table>
-<thead>
-<tr>
-<th><strong><em>收集器</em></strong></th>
-<th><strong><em>收集对象和算法</em></strong></th>
-<th><strong><em>收集器类型</em></strong></th>
-<th><strong><em>说明</em></strong></th>
-<th><strong><em>适用场景</em></strong></th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Serial Old</td>
-<td>老年代，标记整理算法</td>
-<td>单线程</td>
-<td></td>
-<td>Client模式下虚拟机使用</td>
-</tr>
-<tr>
-<td>Parallel Old</td>
-<td>老年代，标记整理算法</td>
-<td>并行的多线程收集器</td>
-<td>Parallel Scavenge收集器的老年代版本，为了配合Parallel Scavenge的面向吞吐量的特性而开发的对应组合；</td>
-<td>在注重吞吐量以及CPU资源敏感的场合采用</td>
-</tr>
-<tr>
-<td>CMS</td>
-<td>老年代，标记清除算法</td>
-<td>并行与并发收集器</td>
-<td>尽可能的缩短垃圾收集时用户线程停止时间；缺点在于： 1.内存碎片 2.需要更多cpu资源 3.浮动垃圾问题，需要更大的堆空间</td>
-<td>重视服务的响应速度、系统停顿时间和用户体验的互联网网站或者B/S系统。互联网后端目前cms是主流的垃圾回收器；</td>
-</tr>
-<tr>
-<td>G1</td>
-<td>跨新生代和老年代；标记整理 + 化整为零</td>
-<td>并行与并发收集器</td>
-<td>JDK1.7才正式引入，采用分区回收的思维，基本不牺牲吞吐量的前提下完成低停顿的内存回收；可预测的停顿是其最大的优势；</td>
-<td>面向服务端应用的垃圾回收器，目标为取代CMS</td>
-</tr>
-</tbody></table>
-<p>并行：垃圾收集的多线程的同时进行。</p>
-<p>并发：垃圾收集的多线程和应用的多线程同时进行。</p>
-<p>注：吞吐量=运行用户代码时间/(运行用户代码时间+ 垃圾收集时间)</p>
-<p>垃圾收集时间= 垃圾回收频率 * 单次垃圾回收时间</p>
-<h3 id="2-2-垃圾回收器工作示意图"><a href="#2-2-垃圾回收器工作示意图" class="headerlink" title="2.2 垃圾回收器工作示意图"></a>2.2 垃圾回收器工作示意图</h3><ul>
-<li><p>Serial/Serial Old</p>
-<p>最古老的，单线程，独占式，成熟，适合单CPU  服务器</p>
-<p>-XX:+UseSerialGC 新生代和老年代都用串行收集器</p>
-<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
-<p>-XX:+UseParallelGC 新生代使用ParallerGC，老年代使用Serial Old</p>
-</li>
-<li><p>ParNew</p>
-<p>和Serial基本没区别，唯一的区别：多线程，多CPU的，停顿时间比Serial少</p>
-<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
-</li>
-<li><p>Parallel Scavenge（ParallerGC）/Parallel Old</p>
-<p>​    关注吞吐量的垃圾收集器，高吞吐量则可以高效率地利用CPU时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务。</p>
-<p>​    所谓吞吐量就是CPU用于运行用户代码的时间与CPU总消耗时间的比值，即吞吐量=运行用户代码时间/（运行用户代码时间+垃圾收集时间），虚拟机总共运行了100分钟，其中垃圾收集花掉1分钟，那吞吐量就是99%。</p>
-</li>
-<li><p>Concurrent Mark Sweep （CMS）</p>
- 
-
-<p>​    CMS收集器是一种以获取<strong>最短回收停顿时间</strong>为目标的收集器。目前很大一部分的Java应用集中在互联网站或者B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿时间最短，以给用户带来较好的体验。CMS收集器就非常符合这类应用的需求。</p>
-<p>​    从名字（包含“Mark Sweep”）上就可以看出，CMS收集器是基于<strong>“标记—清除”算法</strong>实现的，它的运作过程相对于前面几种收集器来说更复杂一些，整个过程分为4个步骤，包括：</p>
-<p><strong>l</strong> <strong><em>初始标记</em></strong>——短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快</p>
-<p><strong>l</strong> <strong><em>并发标记</em></strong>——长，和用户的应用程序同时进行，进行GC Roots追踪的过程</p>
-<p><strong>l</strong> <strong><em>重新标记</em></strong>——短暂，为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短</p>
-<p><strong>l</strong> <strong><em>并发清除</em></strong>——长，清除掉标记的对象</p>
-<p><strong>l 优点：</strong></p>
-<p>​    由于整个过程中耗时最长的并发标记和并发清除过程收集器线程都可以与用户线程一起工作，所以，从总体上来说，CMS收集器的内存回收过程是与用户线程一起并发执行的，用户体验好。</p>
-<p>-XX:+UseConcMarkSweepGC ，表示新生代使用ParNew，老年代的用CMS</p>
-<p><strong>l 缺点：</strong></p>
-<ul>
-<li><p>浮动垃圾</p>
-<p>​    由于CMS并发清理阶段用户线程还在运行着，伴随程序运行自然就还会有新的垃圾不断产生，这一部分垃圾出现在标记过程之后，CMS无法在当次收集中处理掉它们，只好留待下一次GC时再清理掉。这一部分垃圾就称为“浮动垃圾”。</p>
-<p>​    为了防止浮动垃圾导致OOM，每次在老年代内存被占了80%时就会进行GC，如果还是OOM了，就让Serial Old 进行处理，这是STW会特别多，影响用户体验。</p>
-</li>
-<li><p>内存碎片</p>
-<p>因为CMS采用的是标记——清除算法，所以会存在内存碎片，导致GC提前进行。</p>
-</li>
-<li><p>CPU敏感：CPU小于4时影响性能</p>
-</li>
-</ul>
-</li>
-<li><p>G1</p>
-  
-
-<p>-XX:+UseG1GC</p>
-<ul>
-<li><p>并发标记周期</p>
-<ul>
-<li><p>初始标记</p>
-<p>​    短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，产生一个全局停顿，都伴随有一次新生代的GC。</p>
-</li>
-<li><p>根区域扫描</p>
-<p>扫描survivor区可以直接到达的老年代区域。</p>
-</li>
-<li><p>并发标记阶段</p>
-<p>扫描和查找整个堆的存活对象，并标记。</p>
-</li>
-<li><p>重新标记</p>
-<p>会产生全局停顿，对并发标记阶段的结果进行修正。</p>
-</li>
-<li><p>独占清理</p>
-<p>会产生全局停顿，对GC回收比例进行排序，供混合收集阶段使用。</p>
-</li>
-<li><p>并发清理</p>
-<p>识别并清理完全空闲的区域，并发进行。</p>
-</li>
-</ul>
-</li>
-<li><p>并行与并发</p>
-<p>​    G1能充分利用多CPU、多核环境下的硬件优势，使用多个CPU（CPU或者CPU核心）来缩短Stop-The-World停顿的时间，部分其他收集器原本需要停顿Java线程执行的GC动作，G1收集器仍然可以通过并发的方式让Java程序继续执行。</p>
-</li>
-<li><p>分代收集</p>
-<p>​    与其他收集器一样，分代概念在G1中依然得以保留。虽然G1可以不需要其他收集器配合就能独立管理整个GC堆，但它能够采用不同的方式去处理新创建的对象和已经存活了一段时间、熬过多次GC的旧对象以获取更好的收集效果。</p>
-
-</li>
-<li><p>空间整合</p>
-<p>​    与CMS的“标记—清理”算法不同，G1从整体来看是基于“标记—整理”算法实现的收集器，从局部（两个Region之间）上来看是基于“复制”算法实现的，但无论如何，这两种算法都意味着G1运作期间不会产生内存空间碎片，收集后能提供规整的可用内存。这种特性有利于程序长时间运行，分配大对象时不会因为无法找到连续内存空间而提前触发下一次GC。</p>
-</li>
-<li><p>内存布局</p>
-<p>​    在G1之前的其他收集器进行收集的范围都是整个新生代或者老年代，而G1不再是这样。使用G1收集器时，Java堆的内存布局就与其他收集器有很大差别，它将整个Java堆划分为多个大小相等的独立区域（Region），虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔离的了，它们都是一部分Region（不需要连续）的集合。</p>
-</li>
-<li><p>混合收集</p>
-<ul>
-<li><p>对含有垃圾比例较高的Region进行回收。</p>
-</li>
-<li><p>G1当出现内存不足的的情况，也可能进行的FullGC回收。</p>
-</li>
-<li><p>G1中重要的参数：</p>
-<p>-XX:MaxGCPauseMillis 指定目标的最大停顿时间，G1尝试调整新生代和老年代的比例，堆大小，晋升年龄来达到这个目标时间。</p>
-<p>-XX:ParallerGCThreads：设置GC的工作线程数量</p>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-<h2 id="3-Stop-The-World现象"><a href="#3-Stop-The-World现象" class="headerlink" title="3. Stop The World现象"></a>3. Stop The World现象</h2><p>STW就是暂停用户线程。</p>
-<p>GC收集器和我们GC调优的目标就是尽可能的减少STW的时间和次数。</p>
-<h2 id="4-未来的垃圾回收"><a href="#4-未来的垃圾回收" class="headerlink" title="4. 未来的垃圾回收"></a>4. 未来的垃圾回收</h2><p>​    ZGC通过技术手段把stw的情况控制在仅有一次，就是第一次的初始标记才会发生，这样也就不难理解为什么GC停顿时间不随着堆增大而上升了，再大我也是通过并发的时间去回收了。</p>
-<p>​    关键技术：</p>
-<p>​    <strong>1.</strong> <strong><em>有色指针（Colored Pointers）</em></strong></p>
-<p>​    <strong>2.</strong> <strong><em>加载屏障（Load Barrier）</em></strong></p>
-<h2 id="5-常量池与String"><a href="#5-常量池与String" class="headerlink" title="5. 常量池与String"></a>5. 常量池与String</h2><p>​    常量池有很多概念，包括运行时常量池、class常量池、字符串常量池。</p>
-<p>​    虚拟机规范只规定以上区域属于方法区，并没有规定虚拟机厂商的实现。</p>
-<p>​    严格来说是静态常量池和运行时常量池，静态常量池是存放字符串字面量、符号引用以及类和方法的信息，而运行时常量池存放的是运行时一些直接引用。<br>​    运行时常量池是在类加载完成之后，将静态常量池中的符号引用值转存到运行时常量池中，类在解析之后，将符号引用替换成直接引用。<br>​    这两个常量池在JDK1.7版本之后，就移到堆内存中了，这里指的是物理空间，而逻辑上还是属于方法区（方法区是逻辑分区）。</p>
-<ul>
-<li><p>字面量</p>
-<p>给基本类型变量赋值的方式就叫做字面量或者字面值。</p>
-<p>比如：int i=120; long j=10L;</p>
-</li>
-<li><p>符号引用</p>
-<p>​    包括类和方法的全限定名（例如 String 这个类，它的全限定名就是 Java/lang/String）、字段的名称和描述符以及方法的名称和描述符。</p>
-</li>
-<li><p>直接引用</p>
-<p>具体对象的索引值。</p>
-</li>
-<li><p>String的初始赋值</p>
- 
-
-<pre><code>而如果调用了insern方法，就是直接在字符串常量池中找字符串，如果没有再创建，返回的是字符串常量池的引用。</code></pre></li>
-</ul>
-<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1><h2 id="1-ART和Dalvik"><a href="#1-ART和Dalvik" class="headerlink" title="1. ART和Dalvik"></a>1. ART和Dalvik</h2><p>​    Android应用程序运行在Dalvik/ART虚拟机，并且每一个应用程序对应有一个单独的Dalvik虚拟机实例。Dalvik虚拟机实则也算是一个Java虚拟机，只不过它执行的不是class文件，而是dex文件。</p>
-<p>​    Dalvik虚拟机与Java虚拟机共享有差不多的特性，差别在于两者执行的指令集是不一样的，前者的指令集是基本寄存器的，而后者的指令集是基于堆栈的。</p>
-
-
-
-
-<ul>
-<li><p>基于寄存器的虚拟机：</p>
-<p>​    相当于把基于堆栈的虚拟机的局部变量表和操作数栈合并为了一个虚拟寄存器，模仿CPU寄存器操作，将指令运行步骤大大减少。</p>
-</li>
-</ul>
-<p>​    （1）Dalvik虚拟机执行的是dex字节码，是解释执行，在Android2.2后，加入了JIT（即时编译技术），在运行时可以选择经常执行的代码进行编译优化，在本次程序执行完毕后会清除记录。</p>
-<p>​    （2）在Android5.0后，默认使用ART虚拟机，直接执行本地机器码，而把dex字节码编译成机器码的东西就是AOT（预先编译技术），在程序安装时进行预编译，将应用直接编译为机器码，但是这样的弊端就是安装会非常慢。</p>
-<p>​    （3）在安装时，dalvik将.dex文件优化为.odex文件，ART将.dex文件优化为机器码文件。</p>
-<p>​    （4）Android N ：混合编译，在第一次安装时不执行AOT（安装速度变快），在运行的同时进行JIT，将经常运行的代码进行编译，并保存到Profile文件下。在手机充电或者闲置时，通过AOT技术将Profile文件下的代码进行编译，保存机器码，下次运行时直接使用。</p>
-<h2 id="2-Android类加载器"><a href="#2-Android类加载器" class="headerlink" title="2. Android类加载器"></a>2. Android类加载器</h2>
-
-<p>全局getClassLoader获取到的就是PathClassLoader</p>
-<p>​    类加载过程：</p>
-<ul>
-<li><p>loadClass</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="keyword">boolean</span> resolve)                         <span class="keyword">throws</span> ClassNotFoundException</span><br><span class="line">    &#123;</span><br><span class="line">    Class&lt;?&gt; c = findLoadedClass(name);<span class="comment">//寻找是否已经加载</span></span><br><span class="line">    <span class="keyword">if</span>(c == <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="comment">//如果没有加载，首先找父加载器，这里的父加载器是BootClassLoader</span></span><br><span class="line">        c = parent.loadClass(name, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">        	<span class="comment">//如果还是未加载，就使用自己的类加载器进行加载</span></span><br><span class="line">        	c = findClass(name);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>这里采用的是双亲委派模型，先让父加载器加载，再让自己加载。</p>
-<p>原因：</p>
-<ul>
-<li>安全性：无法恶意篡改系统已有的类，因为会被BootClassLoader直接加载，加载的是系统层的类</li>
-<li>避免重复加载</li>
-</ul>
-</li>
-<li><p>findLoadedClass 调用的是VMClassLoader类里的方法，直接是native层</p>
-</li>
-<li><p>parent.loadClass</p>
-<p>调用到BaseDexClassLoader的findClass方法。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException&#123;</span><br><span class="line">    Class c = pathList.findClass(name, suppressedExceptions);</span><br><span class="line">    <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>而pathList是一个DexPathList对象。</p>
-<p>在pathList中又有一个element数组用于存放多个dex文件。</p>
-<p>最后遍历编译。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"> <span class="keyword">private</span> Element[] dexElements;</span><br><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">     <span class="keyword">for</span> (Element element : dexElements) &#123;</span><br><span class="line">            Class&lt;?&gt; clazz = element.findClass(name, definingContext, suppressed);</span><br><span class="line">            <span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> clazz;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, ClassLoader definingContext,</span><br><span class="line">                List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">            <span class="keyword">return</span> dexFile != <span class="keyword">null</span> ? dexFile.loadClassBinaryName(name, definingContext, suppressed)</span><br><span class="line">                    : <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
-
-<p>直接loadClassBinaryName把dex文件编译加载好。</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> Element[] makeDexElements(List&lt;File&gt; files, File optimizedDirectory,</span><br><span class="line">           List&lt;IOException&gt; suppressedExceptions, ClassLoader loader, <span class="keyword">boolean</span> isTrusted)</span><br></pre></td></tr></table></figure>
-
-<p>通过这个方法把element数组初始化，在热修复时也可以通过这个方法，把dex文件构造成element数组，放在pathList中dexElements的最前面。</p>
-</li>
-</ul>
-  
-
-<ul>
-<li><p>findClass</p>
-<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException &#123;</span><br><span class="line">       <span class="keyword">return</span> Class.classForName(name, <span class="keyword">false</span>, <span class="keyword">null</span>);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
-
-<p>直接寻找类名并加载。</p>
-</li>
-</ul>
-]]></content>
+    <title>插件化换肤</title>
+    <url>/2020/07/26/%E6%8F%92%E4%BB%B6%E5%8C%96%E6%8D%A2%E8%82%A4/</url>
+    <content><![CDATA[<h1 id="插件化换肤"><a href="#插件化换肤" class="headerlink" title="插件化换肤"></a>插件化换肤</h1>]]></content>
   </entry>
   <entry>
     <title>事件分发二级联动</title>
@@ -1366,6 +1047,244 @@
 ]]></content>
   </entry>
   <entry>
+    <title>注解与动态代理</title>
+    <url>/2020/11/30/%E6%B3%A8%E8%A7%A3%E4%B8%8E%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86/</url>
+    <content><![CDATA[<h1 id="注解"><a href="#注解" class="headerlink" title="注解"></a>注解</h1><p>​    Java 注解（Annotation）又称 Java 标注，是 JDK5.0 引入的一种注释机制。 注解是元数据的一种形式，提供有关</p>
+<p>于程序但不属于程序本身的数据。注解对它们注解的代码的操作没有直接影响。</p>
+<h2 id="注解声明"><a href="#注解声明" class="headerlink" title="注解声明"></a><strong>注解声明</strong></h2><h3 id="声明一个注解类型"><a href="#声明一个注解类型" class="headerlink" title="声明一个注解类型"></a><strong>声明一个注解类型</strong></h3><p>Java中所有的注解，默认实现 Annotation 接口：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> java.lang.annotation; </span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">interface</span> <span class="title">Annotation</span> </span>&#123; </span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">boolean</span> <span class="title">equals</span><span class="params">(Object obj)</span></span>; </span><br><span class="line"></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">hashCode</span><span class="params">()</span></span>; </span><br><span class="line"></span><br><span class="line">	<span class="function">String <span class="title">toString</span><span class="params">()</span></span>; </span><br><span class="line"></span><br><span class="line">	Class&lt;? extends Annotation&gt; annotationType(); </span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>与声明一个”<strong>Class</strong>“不同的是，注解的声明使用 @interface 关键字。一个注解的声明如下：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Lance&#123; </span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="元注解"><a href="#元注解" class="headerlink" title="元注解"></a><strong>元注解</strong></h3><p>在定义注解时，注解类也能够使用其他的注解声明。对注解类型进行注解的注解类，我们称之为 meta</p>
+<p>annotation（元注解）。一般的，我们在定义自定义注解时，需要指定的元注解有两个 ： </p>
+<p>（另外还有<strong>@Documented</strong> 与 <strong>@Inherited</strong> 元注解，前者用于被javadoc工具提取成文档，后者表示允许子类</p>
+<p>继承父类中定义的注解）</p>
+<p><strong>@Target</strong></p>
+<p>注解标记另一个注解，以限制可以应用注解的 Java 元素类型。目标注解指定以下元素类型之一作为其值：</p>
+<ul>
+<li><p>ElementType.ANNOTATION_TYPE 可以应用于注解类型。</p>
+</li>
+<li><p>ElementType.CONSTRUCTOR 可以应用于构造函数。</p>
+</li>
+<li><p>ElementType.FIELD 可以应用于字段或属性。</p>
+</li>
+<li><p>ElementType.LOCAL_VARIABLE 可以应用于局部变量。</p>
+</li>
+<li><p>ElementType.METHOD 可以应用于方法级注解。</p>
+</li>
+<li><p>ElementType.PACKAGE 可以应用于包声明。</p>
+</li>
+<li><p>ElementType.PARAMETER 可以应用于方法的参数。</p>
+</li>
+<li><p>ElementType.TYPE 可以应用于类的任何元素。</p>
+</li>
+</ul>
+<p><strong>@Retention</strong></p>
+<p>注解指定标记注解的存储方式：</p>
+<ul>
+<li><p>RetentionPolicy.SOURCE - 标记的注解仅保留在源级别中，并被编译器忽略。</p>
+</li>
+<li><p>RetentionPolicy.CLASS - 标记的注解在编译时由编译器保留，但 Java 虚拟机(JVM)会忽略。</p>
+</li>
+<li><p>RetentionPolicy.RUNTIME - 标记的注解由 JVM 保留，因此运行时环境可以使用它。</p>
+</li>
+</ul>
+<p>（@Retention 三个值中 SOURCE &lt; CLASS &lt; RUNTIME，即CLASS包含了SOURCE，RUNTIME包含SOURCE、</p>
+<p>CLASS。下文会介绍他们不同的应用场景）</p>
+<p>下面来看例子：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//@Target(ElementType.TYPE) 只能在类上标记该注解 </span></span><br><span class="line"></span><br><span class="line"><span class="meta">@Target</span>(&#123;ElementType.TYPE,ElementType.FIELD&#125;) <span class="comment">// 允许在类与类属性上标记该注解 </span></span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.SOURCE) <span class="comment">//注解保留在源码中 </span></span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Lance &#123; </span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="注解类型元素"><a href="#注解类型元素" class="headerlink" title="注解类型元素"></a><strong>注解类型元素</strong></h3><p>在上文元注解中，允许在使用注解时传递参数。我们也能让自定义注解的主体包含 <em>annotation type element (</em>注解 </p>
+<p>类型元素<em>)</em> 声明，它们看起来很像方法，可以定义可选的默认值。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Target</span>(&#123;ElementType.TYPE,ElementType.FIELD&#125;) </span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.SOURCE) </span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Lance &#123; </span><br><span class="line">	<span class="function">String <span class="title">value</span><span class="params">()</span></span>; <span class="comment">//无默认值 </span></span><br><span class="line">	<span class="function"><span class="keyword">int</span> <span class="title">age</span><span class="params">()</span> <span class="keyword">default</span> 1</span>; <span class="comment">//有默认值 </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意：在使用注解时，如果定义的注解中的类型元素无默认值，则必须进行传值。</p>
+<h2 id="注解应用场景"><a href="#注解应用场景" class="headerlink" title="注解应用场景"></a><strong>注解应用场景</strong></h2><p>按照<strong>@Retention</strong> 元注解定义的注解存储方式，注解可以被在三种场景下使用：</p>
+<h3 id="SOURCE"><a href="#SOURCE" class="headerlink" title="SOURCE"></a><strong>SOURCE</strong></h3><p>RetentionPolicy.SOURCE ，作用于源码级别的注解，可提供给IDE语法检查、APT等场景使用。</p>
+<p>在类中使用 SOURCE 级别的注解，其编译之后的class中会被丢弃。</p>
+<h4 id="IDE语法检查"><a href="#IDE语法检查" class="headerlink" title="IDE语法检查"></a>IDE语法检查</h4><p>在Android开发中，有提供 @IntDef 注解，此注解的定义如下：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Retention</span>(SOURCE) <span class="comment">//源码级别注解 </span></span><br><span class="line"><span class="meta">@Target</span>(&#123;ANNOTATION_TYPE&#125;) </span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> IntDef &#123; </span><br><span class="line">    <span class="keyword">int</span>[] value() <span class="keyword">default</span> &#123;&#125;;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">flag</span><span class="params">()</span> <span class="keyword">default</span> <span class="keyword">false</span></span>;</span><br><span class="line">    <span class="function"><span class="keyword">boolean</span> <span class="title">open</span><span class="params">()</span> <span class="keyword">default</span> <span class="keyword">false</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>此注解的意义在于能够取代枚举，实现如方法入参限制。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> LANCE = <span class="number">1</span>;</span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="keyword">int</span> ALVIN = <span class="number">2</span>;</span><br><span class="line"><span class="meta">@IntDef</span>(value = &#123;LANCE，ALVIN&#125;) <span class="comment">//限定为LANCE，ALVIN</span></span><br><span class="line"><span class="meta">@Target</span>(ElementType.PARAMETER) <span class="comment">//作用于参数的注解</span></span><br><span class="line"><span class="meta">@Retention</span>(RetentionPolicy.SOURCE) <span class="comment">//源码级别注解</span></span><br><span class="line"><span class="keyword">public</span> <span class="meta">@interface</span> Teacher &#123;</span><br><span class="line">    </span><br><span class="line">&#125;</span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">test</span><span class="params">(@Teacher <span class="keyword">int</span> teacher)</span> </span>&#123;</span><br><span class="line">    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>本身IDEA/AS 就是由Java开发的，工具实现了对Java语法的检查，借助注解能对被注解的特定语法进行额外检查。</p>
+<h4 id="APT注解处理器"><a href="#APT注解处理器" class="headerlink" title="APT注解处理器"></a>APT注解处理器</h4><p>​    APT全称为：”Anotation Processor Tools”，意为注解处理器。顾名思义，其用于处理注解。编写好的Java源文</p>
+<p>件，需要经过 javac 的编译，翻译为虚拟机能够加载解析的字节码Class文件。注解处理器是 javac 自带的一个工</p>
+<p>具，用来在编译时期扫描处理注解信息。你可以为某些注解注册自己的注解处理器。 注册的注解处理器由 javac</p>
+<p>调起，并将注解信息传递给注解处理器进行处理。</p>
+<blockquote>
+<p>注解处理器是对注解应用最为广泛的场景。在Glide、EventBus3、Butterknifer、Tinker、ARouter等等常用</p>
+<p>框架中都有注解处理器的身影。但是你可能会发现，这些框架中对注解的定义并不是 SOURCE 级别，更多的</p>
+<p>是 CLASS 级别，别忘了：CLASS包含了SOURCE，RUNTIME包含SOURCE、CLASS。</p>
+</blockquote>
+<h3 id="CLASS"><a href="#CLASS" class="headerlink" title="CLASS"></a>CLASS</h3><p>​    定义为 CLASS 的注解，会保留在class文件中，但是会被虚拟机忽略(即无法在运行期反射获取注解)。此时完全符合</p>
+<p>此种注解的应用场景为字节码操作。如：AspectJ、热修复Roubust中应用此场景。</p>
+<p>​    所谓字节码操作即为，直接修改字节码Class文件以达到修改代码执行逻辑的目的。在程序中有多处需要进行是否</p>
+<p>登录的判断。</p>
+<h3 id="RUNTIME"><a href="#RUNTIME" class="headerlink" title="RUNTIME"></a>RUNTIME</h3><p>注解保留至运行期，意味着我们能够在运行期间结合反射技术获取注解中的所有信息。</p>
+<h1 id="动态代理"><a href="#动态代理" class="headerlink" title="动态代理"></a>动态代理</h1><p>​    静态代理就是设计模式中的代理模式，下面看一个例子：</p>
+<p>​    如果有一个订单接口（OrderService），现在有海外订单和本地订单，海外订单需要复杂的流程，所以需要一个代理类，三个类都实现接口，代理类持有海外订单类的对象，来对他进行操作。</p>
+<p>​    <strong>再来看动态代理：</strong></p>
+<p>​    在运行时再创建代理类和其实例，因此显然效率更低。要完成这个场景，需要在运行期动态创建一个Class。JDK提</p>
+<p>供了 Proxy 来完成这件事情。基本使用如下：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//抽象角色 </span></span><br><span class="line"><span class="class"><span class="keyword">interface</span> <span class="title">Api</span> </span>&#123; </span><br><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">test</span><span class="params">(String a)</span></span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//真实角色</span></span><br><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">ApiImpl</span></span>&#123;</span><br><span class="line">    <span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">test</span><span class="params">(String a)</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"真实实现："</span> + a);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//创建真实角色实例</span></span><br><span class="line">ApiImpl api = <span class="keyword">new</span> ApiImpl();</span><br><span class="line"><span class="comment">//JDK动态代理:</span></span><br><span class="line">Proxy.newProxyInstance(getClass().getClassLoader(), <span class="keyword">new</span> Class[]&#123;Api<span class="class">.<span class="keyword">class</span>&#125;,//<span class="title">JDK</span>实现只能代理接口</span></span><br><span class="line"><span class="class">                       <span class="title">new</span> <span class="title">InvocationHandler</span>() </span>&#123; </span><br><span class="line">                           <span class="meta">@Override</span> <span class="function"><span class="keyword">public</span> Object <span class="title">invoke</span><span class="params">(Object proxy, Method method, Object[] args)</span> <span class="keyword">throws</span> Throwable </span>&#123; </span><br><span class="line">                               <span class="comment">//执行真实对象方法</span></span><br><span class="line">                               <span class="keyword">return</span> method.invoke(api, args);</span><br><span class="line">                       &#125;</span><br><span class="line">&#125;);</span><br></pre></td></tr></table></figure>
+
+<p>​    实际上， Proxy.newProxyInstance 会创建一个Class，与静态代理不同，这个Class不是由具体的.java源文件编译</p>
+<p>而来，即没有真正的文件，只是在内存中按照Class格式生成了一个Class。</p>
+<p>​    通过InvocationHandler类对代理类进行监听，在调用方法时回调。</p>
+<h1 id="泛型"><a href="#泛型" class="headerlink" title="泛型"></a>泛型</h1><ul>
+<li><p>泛型优点：</p>
+<ul>
+<li>代码健壮性强（编译时期不报错运行时就不会报错）</li>
+<li>不用类型强转</li>
+<li>复用性更强</li>
+</ul>
+</li>
+<li><p>泛型缺点</p>
+<ul>
+<li><p>无法定义基本类型，无法使用instanceof关键字，因为泛型擦除后会擦除为顶层类型</p>
+</li>
+<li><p>泛型因为会擦除，所以不存在协变，所以没有泛型数组</p>
+</li>
+<li><p>无法定义泛型的静态变量和静态常量，因为泛型要在类实例构造之后才能确定，而静态变量、常量在类实例构造之前就已经初始化</p>
+</li>
+<li><p>无法在一个泛型中定义两个相同的方法，如：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Test</span>&lt;<span class="title">T</span>&gt;</span>&#123;</span><br><span class="line">	<span class="function"><span class="keyword">void</span> <span class="title">equals</span><span class="params">(Object o)</span></span>&#123;</span><br><span class="line">        </span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="function"><span class="keyword">void</span> <span class="title">equals</span><span class="params">(T t)</span></span>&#123;</span><br><span class="line">        </span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>因为泛型擦除后两个方法完全一样，无法区别</p>
+</li>
+<li><p>泛型无法构造实例，但是可以通过反射构造</p>
+</li>
+</ul>
+</li>
+<li><p>类型擦除机制</p>
+<ul>
+<li><p>如果没有父类，擦除为Object</p>
+</li>
+<li><p>如果有父类，擦除为最顶层的父类</p>
+</li>
+<li><p>如果有实现的接口，擦除为实现的第一个接口</p>
+</li>
+<li><p>为保证多态，会在编译时期定义桥方法，如：</p>
+<p>这是擦除之后的代码</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">Node</span> </span>&#123;</span><br><span class="line">    <span class="keyword">public</span> Object data;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">Node</span><span class="params">(Object data)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">this</span>.data = data; </span><br><span class="line">    &#125; </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setData</span><span class="params">(Object data)</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"Node.setData"</span>);</span><br><span class="line">        <span class="keyword">this</span>.data = data;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">MyNode</span> <span class="keyword">extends</span> <span class="title">Node</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="title">MyNode</span><span class="params">(Integer data)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">super</span>(data);</span><br><span class="line">    &#125; </span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setData</span><span class="params">(Integer data)</span> </span>&#123;</span><br><span class="line">        System.out.println(<span class="string">"MyNode.setData"</span>);</span><br><span class="line">        <span class="keyword">super</span>.setData(data);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">setData</span><span class="params">(Object data)</span> </span>&#123;</span><br><span class="line">        setData((Integer) data);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>setData方法就不为子类重写父类的方法了，所以会在子类中自动添加一个桥接方法setData（Object o），保证多态</p>
+</li>
+<li><p>为保证安全，有时候会在编译时期进行类型强转</p>
+</li>
+</ul>
+</li>
+</ul>
+]]></content>
+  </entry>
+  <entry>
+    <title>RecyclerView回收复用机制</title>
+    <url>/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/</url>
+    <content><![CDATA[<h1 id="一、复用"><a href="#一、复用" class="headerlink" title="一、复用"></a>一、复用</h1><h2 id="1、滑动时的复用入口"><a href="#1、滑动时的复用入口" class="headerlink" title="1、滑动时的复用入口"></a>1、滑动时的复用入口</h2><h3 id="1-1-获取缓存并复用的流程"><a href="#1-1-获取缓存并复用的流程" class="headerlink" title="1.1 获取缓存并复用的流程"></a>1.1 获取缓存并复用的流程</h3><ul>
+<li><p>onTouchEvent </p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">case</span> MotionEvent.ACTION_MOVE: &#123;</span><br><span class="line">    <span class="keyword">if</span> (scrollByInternal(</span><br><span class="line">                            canScrollHorizontally ? dx : <span class="number">0</span>,</span><br><span class="line">                            canScrollVertically ? dy : <span class="number">0</span>,</span><br><span class="line">                            vtev)) &#123;</span><br><span class="line">                        getParent().requestDisallowInterceptTouchEvent(<span class="keyword">true</span>);</span><br><span class="line">                    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>scrollByInternal</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (x != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedX = mLayout.scrollHorizontallyBy(x, mRecycler, mState);</span><br><span class="line">              unconsumedX = x - consumedX;</span><br><span class="line">          &#125;</span><br><span class="line">          <span class="keyword">if</span> (y != <span class="number">0</span>) &#123;</span><br><span class="line">              consumedY = mLayout.scrollVerticallyBy(y, mRecycler, mState);</span><br><span class="line">              unconsumedY = y - consumedY;</span><br><span class="line">          &#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>scrollVerticallyBy</p>
+<p>直接看LinearLayoutManager里面重写的方法。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">if</span> (mOrientation == HORIZONTAL) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> scrollBy(dy, recycler, state);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>scrollBy</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">final</span> <span class="keyword">int</span> consumed = mLayoutState.mScrollingOffset</span><br><span class="line">                + fill(recycler, mLayoutState, state, <span class="keyword">false</span>);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>fill</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">layoutChunk(recycler, state, layoutState, layoutChunkResult);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>layoutChunk</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">View view = layoutState.next(recycler);</span><br><span class="line">addView(view);</span><br></pre></td></tr></table></figure>
+
+<p>在这里获取到缓存的view并addView添加，完成复用。</p>
+</li>
+</ul>
+<h3 id="1-2-RecyclerView缓存机制"><a href="#1-2-RecyclerView缓存机制" class="headerlink" title="1.2 RecyclerView缓存机制"></a>1.2 RecyclerView缓存机制</h3><p>采用四级缓存：（目的是为了提高性能，具体体现在mCacheViews和RecyclerViewPool）</p>
+<ul>
+<li>mChangeScrap与 mAttachedScrap (用来缓存还在屏幕内的 ViewHolder )</li>
+<li>mCachedViews (用来缓存移除屏幕之外的 ViewHolder )</li>
+<li>mViewCacheExtension (开发给用户的自定义扩展缓存，需要用户自己管理 View 的创建和缓存 )</li>
+<li>RecycledViewPool (ViewHolder 缓存池)</li>
+</ul>
+<h3 id="1-3-复用如何调用缓存"><a href="#1-3-复用如何调用缓存" class="headerlink" title="1.3 复用如何调用缓存"></a>1.3 复用如何调用缓存</h3><ul>
+<li><p>进入next方法看看</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">next</span><span class="params">(RecyclerView.Recycler recycler)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">if</span> (mScrapList != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> nextViewFromScrapList();</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">final</span> View view = recycler.getViewForPosition(mCurrentPosition);</span><br><span class="line">            mCurrentPosition += mItemDirection;</span><br><span class="line">            <span class="keyword">return</span> view;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>getViewForPosition</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">View <span class="title">getViewForPosition</span><span class="params">(<span class="keyword">int</span> position, <span class="keyword">boolean</span> dryRun)</span> </span>&#123;</span><br><span class="line">            <span class="keyword">return</span> tryGetViewHolderForPositionByDeadline(position, dryRun, FOREVER_NS).itemView;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>tryGetViewHolderForPositionByDeadline</p>
+<p>分几种情况去获取ViewHolder</p>
+<ul>
+<li>getChangedScrapViewForPosition – mChangeScrap 与动画相关</li>
+<li>getScrapOrHiddenOrCachedHolderForPosition  – mAttachedScrap 、mCachedViews </li>
+<li>getScrapOrCachedViewForId  – mAttachedScrap 、mCachedViews </li>
+<li>mViewCacheExtension.getViewForPositionAndType – 自定义缓存 </li>
+<li>getRecycledViewPool().getRecycledView – 从缓冲池里面获取</li>
+</ul>
+<p>总体流程：</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function">ViewHolder <span class="title">tryGetViewHolderForPositionByDeadline</span><span class="params">(<span class="keyword">int</span> position,</span></span></span><br><span class="line"><span class="function"><span class="params">               <span class="keyword">boolean</span> dryRun, <span class="keyword">long</span> deadlineNs)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//先从mChangedScrap中获取</span></span><br><span class="line">    holder = getChangedScrapViewForPosition(position);</span><br><span class="line">    <span class="comment">//如果没有获取到，再从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">               holder = getScrapOrHiddenOrCachedHolderForPosition(position, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果没有获取到，这里还有一个方法也是从mAttachedScrap 、mCachedViews中获取</span></span><br><span class="line">    <span class="keyword">if</span>(holder == <span class="keyword">null</span>)&#123;</span><br><span class="line">        holder = getScrapOrCachedViewForId(mAdapter.getItemId(offsetPosition),</span><br><span class="line">                       type, dryRun);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，而且自定义了缓存，就从自定义缓存中获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span> &amp;&amp; mViewCacheExtension != <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="keyword">final</span> View view = mViewCacheExtension</span><br><span class="line">                           .getViewForPositionAndType(<span class="keyword">this</span>, position, type);</span><br><span class="line">         <span class="keyword">if</span> (view != <span class="keyword">null</span>) &#123;</span><br><span class="line">         	holder = getChildViewHolder(view);</span><br><span class="line">         &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果还是未获取到，就从缓冲池里获取</span></span><br><span class="line">    <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">        holder = getRecycledViewPool().getRecycledView(type);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//如果最后都未获取到缓存，就调用方法createViewHolder</span></span><br><span class="line">     <span class="keyword">if</span> (holder == <span class="keyword">null</span>) &#123;</span><br><span class="line">         holder = mAdapter.createViewHolder(RecyclerView.<span class="keyword">this</span>, type);</span><br><span class="line">     &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">//holder创建后，绑定布局</span></span><br><span class="line">    bound = tryBindViewHolderByDeadline(holder, offsetPosition, position, deadlineNs);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>进入createViewHolder后，通过子类自定义实现的adapter，重写onCreateViewHolder，来创建viewHolder。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> VH <span class="title">createViewHolder</span><span class="params">(ViewGroup parent, <span class="keyword">int</span> viewType)</span> </span>&#123;</span><br><span class="line">           Trace.beginSection(TRACE_CREATE_VIEW_TAG);</span><br><span class="line">           <span class="keyword">final</span> VH holder = onCreateViewHolder(parent, viewType);</span><br><span class="line">           holder.mItemViewType = viewType;</span><br><span class="line">           Trace.endSection();</span><br><span class="line">           <span class="keyword">return</span> holder;</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
+
+<p>绑定布局流程，进入onBindViewHolder</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line">mAdapter.bindViewHolder(holder, offsetPosition);</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">final</span> <span class="keyword">void</span> <span class="title">bindViewHolder</span><span class="params">(VH holder, <span class="keyword">int</span> position)</span> </span>&#123;</span><br><span class="line">           onBindViewHolder(holder, position, holder.getUnmodifiedPayloads());</span><br><span class="line">       &#125;</span><br></pre></td></tr></table></figure>
+
+
+
+</li>
+</ul>
+<h2 id="2、布局时的复用入口"><a href="#2、布局时的复用入口" class="headerlink" title="2、布局时的复用入口"></a>2、布局时的复用入口</h2><ul>
+<li>RecyclerView.OnLayout</li>
+<li>dispatchLayout()</li>
+<li>dispatchLayoutStep2()</li>
+<li>mLayout.onLayoutChildren(mRecycler, mState)</li>
+<li>fill(recycler, mLayoutState, state, false)</li>
+</ul>
+<p>接下来就和之前的步骤相同了。</p>
+<h1 id="二、回收（缓存）"><a href="#二、回收（缓存）" class="headerlink" title="二、回收（缓存）"></a>二、回收（缓存）</h1><h2 id="1、LinearLayoutManager-onLayoutChildren中缓存"><a href="#1、LinearLayoutManager-onLayoutChildren中缓存" class="headerlink" title="1、LinearLayoutManager.onLayoutChildren中缓存"></a>1、LinearLayoutManager.onLayoutChildren中缓存</h2><p>进入ViewHolder中：</p>
+<ul>
+<li>detachAndScrapAttachedViews(recycler)</li>
+<li>scrapOrRecycleView(recycler, i, v)</li>
+<li>recycler.recycleViewHolderInternal(viewHolder) 以及recycler.scrapView(view)两种方式</li>
+</ul>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title">scrapOrRecycleView</span><span class="params">(Recycler recycler, <span class="keyword">int</span> index, View view)</span> </span>&#123;</span><br><span class="line">           <span class="keyword">if</span> (viewHolder.isInvalid() &amp;&amp; !viewHolder.isRemoved()</span><br><span class="line">                   &amp;&amp; !mRecyclerView.mAdapter.hasStableIds()) &#123;</span><br><span class="line">               recycler.recycleViewHolderInternal(viewHolder);</span><br><span class="line">           &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">               recycler.scrapView(view);</span><br><span class="line">           &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="1-1-recycler-scrapView"><a href="#1-1-recycler-scrapView" class="headerlink" title="1.1 recycler.scrapView"></a>1.1 recycler.scrapView</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">scrapView</span><span class="params">(View view)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span>（。。。）&#123;</span><br><span class="line">        mAttachedScrap.add(holder);</span><br><span class="line">    &#125;<span class="keyword">else</span>&#123;</span><br><span class="line">        mChangedScrap.add(holder);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在这里只对mAttachedScrap、mChangedScrap进行缓存，直接添加进集合。</p>
+<h3 id="1-2-recycler-recycleViewHolderInternal"><a href="#1-2-recycler-recycleViewHolderInternal" class="headerlink" title="1.2 recycler.recycleViewHolderInternal"></a>1.2 recycler.recycleViewHolderInternal</h3><figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">boolean</span> cached = <span class="keyword">false</span>;</span><br><span class="line"><span class="keyword">if</span> (forceRecycle || holder.isRecyclable()) &#123;</span><br><span class="line">    <span class="comment">//这里如果viewHolder发生改变，就不会进入if语句</span></span><br><span class="line">    <span class="keyword">if</span> (mViewCacheMax &gt; <span class="number">0</span> &amp;&amp; !holder.hasAnyOfTheFlags(ViewHolder.FLAG_INVALID</span><br><span class="line">                                | ViewHolder.FLAG_REMOVED</span><br><span class="line">                                | ViewHolder.FLAG_UPDATE</span><br><span class="line">                                | ViewHolder.FLAG_ADAPTER_POSITION_UNKNOWN)) &#123;</span><br><span class="line">        <span class="keyword">int</span> cachedViewSize = mCachedViews.size();</span><br><span class="line">    	<span class="keyword">if</span> (cachedViewSize &gt;= mViewCacheMax &amp;&amp; cachedViewSize &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        	<span class="comment">//mViewCacheMax的值为2</span></span><br><span class="line">        	<span class="comment">//如果mCachedViews大小大于2，就把第一位的viewHolder从mCachedViews里移除，放入缓存池中</span></span><br><span class="line">    		recycleCachedViewAt(<span class="number">0</span>);<span class="comment">//--&gt; 进入方法会调用addViewHolderToRecycledViewPool(viewHolder, true)</span></span><br><span class="line">    		cachedViewSize--;</span><br><span class="line">    	&#125;</span><br><span class="line">        <span class="comment">//往mCachedViews里添加新的viewHolder缓存</span></span><br><span class="line">    	mCachedViews.add(targetCacheIndex, holder);</span><br><span class="line">    	cached = <span class="keyword">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line">	<span class="comment">//相当于如果viewHolder改变，就会把viewHolder直接添加到缓存池中</span></span><br><span class="line">    <span class="keyword">if</span> (!cached) &#123;</span><br><span class="line">    	addViewHolderToRecycledViewPool(holder, <span class="keyword">true</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;<span class="keyword">else</span>&#123;</span><br><span class="line">	 mViewInfoStore.removeViewHolder(holder);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这个过程可以用下图表示：</p>
+<img src="/2020/08/07/RecyclerView%E5%9B%9E%E6%94%B6%E5%A4%8D%E7%94%A8%E6%9C%BA%E5%88%B6/%E7%BC%93%E5%AD%98.png" class title="缓存">
+
+
+
+<p>缓存池中一个类型的viewHolder最大可以存放五个。</p>
+<p>如果不需要缓存或者缓存池该类型的数组已满，那么就直接把这个viewHolder丢弃，因为缓存池中存放的是viewHolder的类型，不存入也不影响。</p>
+<p>最后在addViewHolderToRecycledViewPool方法中将viewHolder放入缓存池后，把该viewHolder清空。</p>
+<p>addViewHolderToRecycledViewPool - &gt; getRecycledViewPool().putRecycledView(holder) -&gt;  scrap.resetInternal()</p>
+<p>在这个方法中把viewHolder的标记重置，完成清空。</p>
+<p>由此可以看出，在这个方法中，对mCachedViews、RecyclerViewPool进行处理。</p>
+<h2 id="2、LinearLayoutManager-onLayoutChildren的fill中缓存"><a href="#2、LinearLayoutManager-onLayoutChildren的fill中缓存" class="headerlink" title="2、LinearLayoutManager.onLayoutChildren的fill中缓存"></a>2、LinearLayoutManager.onLayoutChildren的fill中缓存</h2><p>会从fill方法中调用 recycler.recycleViewHolderInterna方法，所以在fill这里只会处理mCachedViews和缓存池的缓存。</p>
+<h1 id="三、自定义layoutManager"><a href="#三、自定义layoutManager" class="headerlink" title="三、自定义layoutManager"></a>三、自定义layoutManager</h1><p>调用detachAndScrapAttachedViews(recycler)进行回收复用</p>
+<p>调用recycler.getViewForPosition(i)进行缓存</p>
+]]></content>
+  </entry>
+  <entry>
     <title>自定义View</title>
     <url>/2020/07/21/%E8%87%AA%E5%AE%9A%E4%B9%89View/</url>
     <content><![CDATA[<h1 id="自定义View"><a href="#自定义View" class="headerlink" title="自定义View"></a>自定义View</h1><h2 id="1-1-什么是自定义View？"><a href="#1-1-什么是自定义View？" class="headerlink" title="1.1 什么是自定义View？"></a>1.1 什么是自定义View？</h2><p>​    自定义View大体上就是三个步骤：</p>
@@ -1467,80 +1386,6 @@
 <h3 id="1-7-2-改正方法"><a href="#1-7-2-改正方法" class="headerlink" title="1.7.2 改正方法"></a>1.7.2 改正方法</h3><p>重写viewPager的onMeasure方法，先度量孩子。</p>
 <h2 id="1-8-FlexBoxLayout"><a href="#1-8-FlexBoxLayout" class="headerlink" title="1.8 FlexBoxLayout"></a>1.8 FlexBoxLayout</h2><h3 id="1-8-1-使用"><a href="#1-8-1-使用" class="headerlink" title="1.8.1 使用"></a>1.8.1 使用</h3><p> <a href="https://www.jianshu.com/p/0723ff4123e1" target="_blank" rel="noopener">https://www.jianshu.com/p/0723ff4123e1</a> </p>
 ]]></content>
-  </entry>
-  <entry>
-    <title>设计模式</title>
-    <url>/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/</url>
-    <content><![CDATA[<h1 id="一、设计模式六大原则"><a href="#一、设计模式六大原则" class="headerlink" title="一、设计模式六大原则"></a>一、设计模式六大原则</h1><ul>
-<li>单一职责原则：一个类就只负责一个工作</li>
-<li>里氏替换原则：子类可以拓展功能，但是不要替换父类的功能</li>
-<li>依赖倒置原则：面向接口编程</li>
-<li>迪米特法则：耦合度降低，不能在方法中新增没有的类</li>
-<li>开闭原则：对扩展开放，对修改关闭，即新增功能时最好不要修改原有代码</li>
-<li>接口隔离原则：接口功能要最小单元化</li>
-</ul>
-<h1 id="二、设计模式"><a href="#二、设计模式" class="headerlink" title="二、设计模式"></a>二、设计模式</h1><h2 id="1、简单工厂模式"><a href="#1、简单工厂模式" class="headerlink" title="1、简单工厂模式"></a>1、简单工厂模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AE%80%E5%8D%95%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="简单工厂模式">
-
-<h2 id="2、工厂方法模式"><a href="#2、工厂方法模式" class="headerlink" title="2、工厂方法模式"></a>2、工厂方法模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%B7%A5%E5%8E%82%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="工厂方法模式">
-
-<p>​    当水果数量越来越多时，简单工厂模式会越来越复杂，违背了单一职责原则、开闭原则，所以需要把每个水果单一创建一个工厂。</p>
-<h2 id="3、抽象工厂模式"><a href="#3、抽象工厂模式" class="headerlink" title="3、抽象工厂模式"></a>3、抽象工厂模式</h2><p>​    工厂方法模式有一个缺点，就是当新加入了一个工厂后，同一个对象可能会调用出现错误，为了避免这种错误，可以使用抽象工厂模式。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%8A%BD%E8%B1%A1%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="抽象工厂模式">
-
-<h2 id="4、建造者模式"><a href="#4、建造者模式" class="headerlink" title="4、建造者模式"></a>4、建造者模式</h2><p>​    建造者模式实际上也是工厂模式的一种，Builder就是一个工厂，它和工厂模式的不同之处就在于它是有一个模板的，所有事情都会按照这个模板来进行。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%BB%BA%E9%80%A0%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="建造者模式">
-
-<h2 id="5、工厂模式总结"><a href="#5、工厂模式总结" class="headerlink" title="5、工厂模式总结"></a>5、工厂模式总结</h2><ul>
-<li>原则<ul>
-<li>解耦：把对象的创建和使用的过程分开</li>
-<li>工厂负责对象的创建，包括其init方法的调用，黑盒创建过程</li>
-<li>面向接口编程： 使用者只管使用，只知其接口而不知其实现类</li>
-</ul>
-</li>
-<li>对比<ul>
-<li>静态工厂：把所有对象的创建逻辑集中到一个（专业）类里处理</li>
-<li>工厂方法模式：一个工厂负责创建一个产品类的创建</li>
-<li>将一个系列的产品的工厂合并成一个工厂，负责生产这个系列的产品</li>
-<li>对象的创建比较复杂时，按步骤一块块创建，让创建过程模板化</li>
-</ul>
-</li>
-</ul>
-<h2 id="6、单例模式"><a href="#6、单例模式" class="headerlink" title="6、单例模式"></a>6、单例模式</h2><p>​    分为懒汉式和饿汉式，懒汉式就是在要用的时候再初始化，需要加锁。</p>
-<p>​    还有静态内部类实现单例，这种方法是因为类加载时不会立即加载内部类，在用到时才会加载，并且也保证了线程安全。</p>
-<h2 id="7、适配器模式"><a href="#7、适配器模式" class="headerlink" title="7、适配器模式"></a>7、适配器模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E9%80%82%E9%85%8D%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="适配器模式">
-
-<h2 id="8、桥接模式"><a href="#8、桥接模式" class="headerlink" title="8、桥接模式"></a>8、桥接模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A1%A5%E6%8E%A5%E6%A8%A1%E5%BC%8F.png" class title="桥接模式">
-
-<p>适配器模式是为了合并，桥接模式是为了分离。</p>
-<h2 id="9、装饰器模式"><a href="#9、装饰器模式" class="headerlink" title="9、装饰器模式"></a>9、装饰器模式</h2><p>动态地给一个对象增加一些额外的职责，为的是功能增强。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A3%85%E9%A5%B0%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="装饰器模式">
-
-<h2 id="10、代理模式"><a href="#10、代理模式" class="headerlink" title="10、代理模式"></a>10、代理模式</h2><p>一个类代表另一个类的功能。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F.png" class title="代理模式">
-
-<h2 id="11、组合模式"><a href="#11、组合模式" class="headerlink" title="11、组合模式"></a>11、组合模式</h2><p>把一组相似的对象当作一个单一的对象，为的是减少数据类型。</p>
-
-
-<h2 id="12、外观模式"><a href="#12、外观模式" class="headerlink" title="12、外观模式"></a>12、外观模式</h2><p>糅合功能，对外只提供一个入口。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%A4%96%E8%A7%82%E6%A8%A1%E5%BC%8F.png" class title="外观模式">
-
-<h2 id="13、模板方法模式"><a href="#13、模板方法模式" class="headerlink" title="13、模板方法模式"></a>13、模板方法模式</h2><p>在父类中编排主流程，将步骤实现延迟到子类去实现。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="模板方法模式">
-
-<h2 id="14、策略模式"><a href="#14、策略模式" class="headerlink" title="14、策略模式"></a>14、策略模式</h2><p>通过选择策略类，来执行不同算法分支。核心是通过注入对象，改变行为。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F.png" class title="策略模式">
-
-<h2 id="15、责任链模式"><a href="#15、责任链模式" class="headerlink" title="15、责任链模式"></a>15、责任链模式</h2><p>将请求传给一个接收者链，由链将请求流转给目标对象。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F.png" class title="责任链模式">
-
-<h2 id="16、观察者模式"><a href="#16、观察者模式" class="headerlink" title="16、观察者模式"></a>16、观察者模式</h2><p>一个对象状态改变时通知其他对象。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="观察者模式">
-
-<h2 id="17、命令模式"><a href="#17、命令模式" class="headerlink" title="17、命令模式"></a>17、命令模式</h2><p>通过增加Command抽象命令类，将不符合抽象编程的handler 调用，转为抽象编程。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%91%BD%E4%BB%A4%E6%A8%A1%E5%BC%8F.png" class title="命令模式">
-
-<h2 id="18、访问者模式"><a href="#18、访问者模式" class="headerlink" title="18、访问者模式"></a>18、访问者模式</h2><p>利用双重分派机制，弥补java多态中的方法重载是静态化的不足。</p>
-<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%AE%BF%E9%97%AE%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="访问者模式">]]></content>
   </entry>
   <entry>
     <title>网络框架</title>
@@ -2453,6 +2298,538 @@
 <p>接下来就是代码实现:</p>
 <figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="comment">//第一步构造next表</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">int</span>[] buildNext(String p)&#123;</span><br><span class="line">        <span class="comment">//构建next表就是查找真前缀 == 真后缀的最大长度，以获取模式串尽量多地往右移动</span></span><br><span class="line">        <span class="keyword">int</span>[] N = <span class="keyword">new</span> <span class="keyword">int</span>[p.length()];</span><br><span class="line">        <span class="keyword">int</span> m = p.length(),j = <span class="number">0</span>;<span class="comment">//主串位置</span></span><br><span class="line">        <span class="keyword">int</span> t = N[<span class="number">0</span>] = -<span class="number">1</span>;<span class="comment">//字串位置</span></span><br><span class="line">        <span class="keyword">while</span>(j &lt; m -<span class="number">1</span>)&#123;</span><br><span class="line">            <span class="keyword">if</span>(t &lt; <span class="number">0</span> || p.charAt(j) == p.charAt(t))&#123;</span><br><span class="line">                j++;t++;</span><br><span class="line">                N[j] = t;</span><br><span class="line">            &#125;<span class="keyword">else</span>&#123;<span class="comment">//失配</span></span><br><span class="line">                t = N[t];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> N;</span><br><span class="line">    &#125;</span><br><span class="line"><span class="comment">//第二步利用next表尽量多地往右移动</span></span><br><span class="line"><span class="function"><span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title">kmp</span><span class="params">(String s, String p)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">int</span>[] next = buildNext(p);<span class="comment">// 调用next（String p）方法</span></span><br><span class="line">        <span class="keyword">int</span> index = -<span class="number">1</span>;<span class="comment">// 成功匹配的位置</span></span><br><span class="line">        <span class="keyword">int</span> sLength = s.length();<span class="comment">// 主串长度</span></span><br><span class="line">        <span class="keyword">int</span> pLength = p.length();<span class="comment">// 子串长度</span></span><br><span class="line">        <span class="keyword">if</span> (sLength &lt; pLength) &#123;</span><br><span class="line">            System.out.println(<span class="string">"Error.The main string is greater than the sub string length."</span>);</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">int</span> i = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">int</span> j = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">while</span> (i &lt; sLength &amp;&amp; j &lt; pLength) &#123;</span><br><span class="line">            <span class="comment">/*</span></span><br><span class="line"><span class="comment">             * 如果j = -1， 或者当前字符匹配成功（即s.charAt(i) == p.charAt(j)）， 都令i++，j++</span></span><br><span class="line"><span class="comment">             * 这两个条件能否交换次序？</span></span><br><span class="line"><span class="comment">             */</span></span><br><span class="line">            <span class="keyword">if</span> (j == -<span class="number">1</span> || s.charAt(i) == p.charAt(j)) &#123;</span><br><span class="line">                i++;</span><br><span class="line">                j++;</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">/*</span></span><br><span class="line"><span class="comment">                 * 如果j != -1，且当前字符匹配失败， 则令 i 不变，j = next[j], next[j]即为j所对应的next值</span></span><br><span class="line"><span class="comment">                 */</span></span><br><span class="line">                j = next[j];</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (j &gt;= pLength) &#123;<span class="comment">// 匹配成功</span></span><br><span class="line">            index = i - j;</span><br><span class="line">            System.out.println(<span class="string">"Successful match,index is:"</span> + index);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;<span class="comment">// 匹配失败</span></span><br><span class="line">            System.out.println(<span class="string">"Match failed."</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
 
+]]></content>
+  </entry>
+  <entry>
+    <title>设计模式</title>
+    <url>/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/</url>
+    <content><![CDATA[<h1 id="一、设计模式六大原则"><a href="#一、设计模式六大原则" class="headerlink" title="一、设计模式六大原则"></a>一、设计模式六大原则</h1><ul>
+<li>单一职责原则：一个类就只负责一个工作</li>
+<li>里氏替换原则：子类可以拓展功能，但是不要替换父类的功能</li>
+<li>依赖倒置原则：面向接口编程</li>
+<li>迪米特法则：耦合度降低，不能在方法中新增没有的类</li>
+<li>开闭原则：对扩展开放，对修改关闭，即新增功能时最好不要修改原有代码</li>
+<li>接口隔离原则：接口功能要最小单元化</li>
+</ul>
+<h1 id="二、设计模式"><a href="#二、设计模式" class="headerlink" title="二、设计模式"></a>二、设计模式</h1><h2 id="1、简单工厂模式"><a href="#1、简单工厂模式" class="headerlink" title="1、简单工厂模式"></a>1、简单工厂模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AE%80%E5%8D%95%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="简单工厂模式">
+
+<h2 id="2、工厂方法模式"><a href="#2、工厂方法模式" class="headerlink" title="2、工厂方法模式"></a>2、工厂方法模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%B7%A5%E5%8E%82%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="工厂方法模式">
+
+<p>​    当水果数量越来越多时，简单工厂模式会越来越复杂，违背了单一职责原则、开闭原则，所以需要把每个水果单一创建一个工厂。</p>
+<h2 id="3、抽象工厂模式"><a href="#3、抽象工厂模式" class="headerlink" title="3、抽象工厂模式"></a>3、抽象工厂模式</h2><p>​    工厂方法模式有一个缺点，就是当新加入了一个工厂后，同一个对象可能会调用出现错误，为了避免这种错误，可以使用抽象工厂模式。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%8A%BD%E8%B1%A1%E5%B7%A5%E5%8E%82%E6%A8%A1%E5%BC%8F.png" class title="抽象工厂模式">
+
+<h2 id="4、建造者模式"><a href="#4、建造者模式" class="headerlink" title="4、建造者模式"></a>4、建造者模式</h2><p>​    建造者模式实际上也是工厂模式的一种，Builder就是一个工厂，它和工厂模式的不同之处就在于它是有一个模板的，所有事情都会按照这个模板来进行。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%BB%BA%E9%80%A0%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="建造者模式">
+
+<h2 id="5、工厂模式总结"><a href="#5、工厂模式总结" class="headerlink" title="5、工厂模式总结"></a>5、工厂模式总结</h2><ul>
+<li>原则<ul>
+<li>解耦：把对象的创建和使用的过程分开</li>
+<li>工厂负责对象的创建，包括其init方法的调用，黑盒创建过程</li>
+<li>面向接口编程： 使用者只管使用，只知其接口而不知其实现类</li>
+</ul>
+</li>
+<li>对比<ul>
+<li>静态工厂：把所有对象的创建逻辑集中到一个（专业）类里处理</li>
+<li>工厂方法模式：一个工厂负责创建一个产品类的创建</li>
+<li>将一个系列的产品的工厂合并成一个工厂，负责生产这个系列的产品</li>
+<li>对象的创建比较复杂时，按步骤一块块创建，让创建过程模板化</li>
+</ul>
+</li>
+</ul>
+<h2 id="6、单例模式"><a href="#6、单例模式" class="headerlink" title="6、单例模式"></a>6、单例模式</h2><p>​    分为懒汉式和饿汉式，懒汉式就是在要用的时候再初始化，需要加锁。</p>
+<p>​    还有静态内部类实现单例，这种方法是因为类加载时不会立即加载内部类，在用到时才会加载，并且也保证了线程安全。</p>
+<h2 id="7、适配器模式"><a href="#7、适配器模式" class="headerlink" title="7、适配器模式"></a>7、适配器模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E9%80%82%E9%85%8D%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="适配器模式">
+
+<h2 id="8、桥接模式"><a href="#8、桥接模式" class="headerlink" title="8、桥接模式"></a>8、桥接模式</h2><img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A1%A5%E6%8E%A5%E6%A8%A1%E5%BC%8F.png" class title="桥接模式">
+
+<p>适配器模式是为了合并，桥接模式是为了分离。</p>
+<h2 id="9、装饰器模式"><a href="#9、装饰器模式" class="headerlink" title="9、装饰器模式"></a>9、装饰器模式</h2><p>动态地给一个对象增加一些额外的职责，为的是功能增强。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A3%85%E9%A5%B0%E5%99%A8%E6%A8%A1%E5%BC%8F.png" class title="装饰器模式">
+
+<h2 id="10、代理模式"><a href="#10、代理模式" class="headerlink" title="10、代理模式"></a>10、代理模式</h2><p>一个类代表另一个类的功能。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E4%BB%A3%E7%90%86%E6%A8%A1%E5%BC%8F.png" class title="代理模式">
+
+<h2 id="11、组合模式"><a href="#11、组合模式" class="headerlink" title="11、组合模式"></a>11、组合模式</h2><p>把一组相似的对象当作一个单一的对象，为的是减少数据类型。</p>
+
+
+<h2 id="12、外观模式"><a href="#12、外观模式" class="headerlink" title="12、外观模式"></a>12、外观模式</h2><p>糅合功能，对外只提供一个入口。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%A4%96%E8%A7%82%E6%A8%A1%E5%BC%8F.png" class title="外观模式">
+
+<h2 id="13、模板方法模式"><a href="#13、模板方法模式" class="headerlink" title="13、模板方法模式"></a>13、模板方法模式</h2><p>在父类中编排主流程，将步骤实现延迟到子类去实现。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E6%A8%A1%E6%9D%BF%E6%96%B9%E6%B3%95%E6%A8%A1%E5%BC%8F.png" class title="模板方法模式">
+
+<h2 id="14、策略模式"><a href="#14、策略模式" class="headerlink" title="14、策略模式"></a>14、策略模式</h2><p>通过选择策略类，来执行不同算法分支。核心是通过注入对象，改变行为。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E7%AD%96%E7%95%A5%E6%A8%A1%E5%BC%8F.png" class title="策略模式">
+
+<h2 id="15、责任链模式"><a href="#15、责任链模式" class="headerlink" title="15、责任链模式"></a>15、责任链模式</h2><p>将请求传给一个接收者链，由链将请求流转给目标对象。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%B4%A3%E4%BB%BB%E9%93%BE%E6%A8%A1%E5%BC%8F.png" class title="责任链模式">
+
+<h2 id="16、观察者模式"><a href="#16、观察者模式" class="headerlink" title="16、观察者模式"></a>16、观察者模式</h2><p>一个对象状态改变时通知其他对象。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="观察者模式">
+
+<h2 id="17、命令模式"><a href="#17、命令模式" class="headerlink" title="17、命令模式"></a>17、命令模式</h2><p>通过增加Command抽象命令类，将不符合抽象编程的handler 调用，转为抽象编程。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E5%91%BD%E4%BB%A4%E6%A8%A1%E5%BC%8F.png" class title="命令模式">
+
+<h2 id="18、访问者模式"><a href="#18、访问者模式" class="headerlink" title="18、访问者模式"></a>18、访问者模式</h2><p>利用双重分派机制，弥补java多态中的方法重载是静态化的不足。</p>
+<img src="/2020/10/27/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/%E8%AE%BF%E9%97%AE%E8%80%85%E6%A8%A1%E5%BC%8F.png" class title="访问者模式">]]></content>
+  </entry>
+  <entry>
+    <title>java虚拟机</title>
+    <url>/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/</url>
+    <content><![CDATA[<h1 id="一、java虚拟机内存机制"><a href="#一、java虚拟机内存机制" class="headerlink" title="一、java虚拟机内存机制"></a>一、java虚拟机内存机制</h1><p>​    程序编译时，先将代码，即.java文件利用javac工具编译成.class文件，再送入JVM，经由类加载器把类信息送入运行时数据区的方法区，最后调用操作系统函数开始运行。</p>
+<p>​    从这里可以得出结论，JVM的作用就是一个翻译官，把字节码文件翻译为机器语言。</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%95%B4%E4%BD%93%E6%B5%81%E7%A8%8B.png" class title="整体流程">
+
+
+
+<h2 id="1-JVM特性"><a href="#1-JVM特性" class="headerlink" title="1. JVM特性"></a>1. JVM特性</h2><ul>
+<li><p>跨平台</p>
+<p>跨平台体现在Java一份代码能在各种操作系统上运行，这是因为jdk有不同的版本，能处理不同的操作系统。</p>
+</li>
+<li><p>跨语言</p>
+<p>​    跨语言体现在许多其它语言，如kotlin、groovy等都能在JVM上运行，原因是这些语言最终都被编译为字节码，JVM能够识别并处理。</p>
+</li>
+</ul>
+<h2 id="2-运行时数据区"><a href="#2-运行时数据区" class="headerlink" title="2. 运行时数据区"></a>2. 运行时数据区</h2><p>​    运行时数据区内部也分为了五个部分，其中虚拟机栈，程序计数器，本地方法栈为线程私有，即每个线程单独都有一份，而堆和方法区为线程共享，所有线程都可以共享其中的数据。</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E6%97%B6%E6%95%B0%E6%8D%AE%E5%8C%BA.png" class title="运行时数据区">
+
+
+
+<h2 id="3-每个部分详细"><a href="#3-每个部分详细" class="headerlink" title="3.每个部分详细"></a>3.每个部分详细</h2><h3 id="3-1-程序计数器"><a href="#3-1-程序计数器" class="headerlink" title="3.1 程序计数器"></a>3.1 程序计数器</h3><ul>
+<li><p>为什么要有程序计数器？</p>
+<p>​    由于 Java 是多线程语言，当执行的线程数量超过 CPU 核数时，线程之间会根据时间片轮询争夺 CPU 资源。如果一个线程的时间片用完了，或者是其它原因导致这个线程的 CPU 资源被提前抢夺，那么这个退出的线程就需要单独的一个程序计数器，来记录下一条运行的指令。</p>
+<p>​    因为操作系统的时间片轮转机制，方法在运行时可能会因为上下文切换导致中止运行，这时候程序计数器需要记录方法中止时运行到的位置，存下当前字节码指令的地址，在再次开始运行时找到上一次中止运行时的位置。</p>
+</li>
+<li><p>程序计数器是JVM中唯一不会OOM的</p>
+<p>​    因为程序计数器的内存非常小，而一般默认一个虚拟机栈是1M大小，一个虚拟机栈内程序计数器再多也无法达到1M。</p>
+</li>
+</ul>
+<h3 id="3-2-虚拟机栈"><a href="#3-2-虚拟机栈" class="headerlink" title="3.2 虚拟机栈"></a>3.2 虚拟机栈</h3><p>​    虚拟机栈是用于管理一个线程当中的方法的，每有一个方法执行，就会把封装有这个方法信息的栈帧压入虚拟机栈，执行结束后就会把对应栈帧出栈。（就类似于虚拟机栈是一个弹夹，栈帧是子弹）</p>
+<p>​    栈帧结构：</p>
+<ul>
+<li>局部变量表：用于存储八种基本变量类型</li>
+<li>操作数栈：在函数执行过程中存放一些中间变量</li>
+<li>动态链接：一般在java多态时，如一个接口的两个实现类，调用重写的同一个方法，用动态链接去区分调用了哪一个方法</li>
+<li>完成出口：用于存储函数返回值。<strong>（正常返回：程序计数器指向的地址，异常返回：通过异常处理器表确定）</strong></li>
+</ul>
+<h3 id="3-3-本地方法栈"><a href="#3-3-本地方法栈" class="headerlink" title="3.3 本地方法栈"></a>3.3 本地方法栈</h3><p>​    虚拟机栈是管理java方法，而本地方法栈是管理native方法，当JVM调用到native方法时，不会将其打包成栈帧入虚拟机栈，而是利用动态链接将其交给操作系统执行。</p>
+<p>​    <strong>HotSpot直接把本地方法栈和虚拟机栈合二为一</strong></p>
+<h3 id="3-4-方法区"><a href="#3-4-方法区" class="headerlink" title="3.4 方法区"></a>3.4 方法区</h3><p>​    方法区存储<strong>常量、静态变量、类信息、即时编译期编译后的内容</strong>。</p>
+<p>​    java1.8之后，运行时常量池中的<strong>字符串</strong>都被放入堆区。</p>
+<p>​    Java1.8以前：永久代是方法区的一种实现。</p>
+<p>​    java1.8以后：用元空间代替永久代。</p>
+<ul>
+<li><p>缺点：容易发生内存溢出，因为GC时回收率偏低，效率低。</p>
+<p>移除永久代是为了融合 HotSpot JVM 与 JRockit VM 而做出的努力，因为 JRockit 没有永久代，所以不需要配置永久代。</p>
+</li>
+</ul>
+<h3 id="3-5-堆"><a href="#3-5-堆" class="headerlink" title="3.5 堆"></a>3.5 堆</h3><p>​    java中的几乎全部对象，以及数组，都是分配在堆中的，他，他们的引用是存储在局部变量表中。</p>
+<h2 id="4-直接内存（堆外内存）"><a href="#4-直接内存（堆外内存）" class="headerlink" title="4. 直接内存（堆外内存）"></a>4. 直接内存（堆外内存）</h2><p>​    除了JVM的栈和堆以外，还有一个不被JVM管理的内存区域，当使用了NIO时会用到，其大小不受虚拟机大小影响，但是受本机总内存大小限制。</p>
+<h2 id="5-从底层深入理解运行时数据区"><a href="#5-从底层深入理解运行时数据区" class="headerlink" title="5.从底层深入理解运行时数据区"></a>5.从底层深入理解运行时数据区</h2><p>运行如下程序：</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/code.png" class title="code">
+
+<p>JVM处理过程如下：</p>
+<ul>
+<li>JVM 向操作系统申请内存，JVM 第一步就是通过配置参数或者默认配置参数向操作系统申请内存空间</li>
+<li>JVM 获得内存空间后，会根据配置参数分配堆、栈以及方法区的内存大小</li>
+<li>完成上一个步骤后， JVM 首先会执行构造器，编译器会在.java 文件被编译成.class 文件时，收集所有类的初始化代码，包括静态变量赋值语句、静态代码块、静态方法，静态变量和常量放入方法区</li>
+<li>执行方法。启动 main 线程，执行 main 方法，开始执行第一行代码。此时堆内存中会创建一个 Teacher 对象，对象引用 student 就存放在栈中。执行其他方法时，具体的操作：栈帧执行对内存区域的影响</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BF%90%E8%A1%8C%E8%BF%87%E7%A8%8B.png" class title="运行过程">
+
+
+
+<p><strong>堆中的内存分配是连续的，且栈内存远小于堆内存。</strong></p>
+<h2 id="6-内存溢出"><a href="#6-内存溢出" class="headerlink" title="6. 内存溢出"></a>6. 内存溢出</h2><h3 id="6-1-栈溢出"><a href="#6-1-栈溢出" class="headerlink" title="6.1 栈溢出"></a>6.1 栈溢出</h3><ul>
+<li>stackOverFlow：当栈帧数量过多，加起来大于虚拟机栈的1M内存空间时，报stackOverFlow</li>
+<li>outOfMemory：当线程数量过多，虚拟机栈数量就过多，加起来大于操作系统分配空间时，报OOM。</li>
+</ul>
+<h3 id="6-2-方法区溢出"><a href="#6-2-方法区溢出" class="headerlink" title="6.2 方法区溢出"></a>6.2 方法区溢出</h3><ul>
+<li>运行时常量池溢出</li>
+<li>方法区中保存的Class对象没有被及时回收掉或者Class信息占用的内存超过了我们配置。</li>
+</ul>
+<p>两者都为OOM</p>
+<p><strong><em>注意Class要被回收，条件比较苛刻（仅仅是可以，不代表必然，因为还有一些参数可以进行控制）：</em></strong></p>
+<ul>
+<li><p>该类所有的实例都已经被回收，也就是堆中不存在该类的任何实例</p>
+</li>
+<li><p>加载该类的ClassLoader已经被回收</p>
+</li>
+<li><p>该类对应的java.lang.Class对象没有在任何地方被引用，无法在任何地方通过反射访问该类的方法</p>
+</li>
+</ul>
+<h3 id="6-3-堆溢出"><a href="#6-3-堆溢出" class="headerlink" title="6.3 堆溢出"></a>6.3 堆溢出</h3><p>​    当创建对象大小大于堆内存空间，或者创建对象过多，且都为存活对象时，报OOM。</p>
+<h3 id="6-4-本地内存溢出"><a href="#6-4-本地内存溢出" class="headerlink" title="6.4 本地内存溢出"></a>6.4 本地内存溢出</h3><p>​    使用NIO时使用大小超过本地内存，也为OOM。</p>
+<h2 id="7-虚拟机优化技术"><a href="#7-虚拟机优化技术" class="headerlink" title="7. 虚拟机优化技术"></a>7. 虚拟机优化技术</h2><ul>
+<li><p>编译优化——内联函数：将传入参数已经确定的函数直接拆开放入调用位置，避免真实的方法调用</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E8%81%94%E5%87%BD%E6%95%B0.png" class title="内联函数">
+</li>
+<li><p>栈优化——栈帧之间的数据共享：调用方的操作数栈和被调用方的局部变量表共享，减小操作空间的同时也减少了一些复制操作</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E6%A0%88%E4%BC%98%E5%8C%96.png" class title="栈优化">
+
+</li>
+</ul>
+<h1 id="二、虚拟机中的对象"><a href="#二、虚拟机中的对象" class="headerlink" title="二、虚拟机中的对象"></a>二、虚拟机中的对象</h1><h2 id="1-对象分配"><a href="#1-对象分配" class="headerlink" title="1. 对象分配"></a>1. 对象分配</h2><ul>
+<li>首先通过类加载，传入JVM</li>
+<li>JVM进行对象检查，检查对象是否已经被类加载器加载完毕，如果未加载完毕，就返回到类加载器处重新加载</li>
+<li>检查通过后，就开始内存分配</li>
+<li>内存空间初始化</li>
+<li>设置（设置对象的对象头的一些参数）</li>
+<li>对象初始化（构造函数执行）</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA.png" class title="对象创建">
+
+
+
+<h3 id="1-1-对象的内存布局"><a href="#1-1-对象的内存布局" class="headerlink" title="1.1 对象的内存布局"></a>1.1 对象的内存布局</h3><ul>
+<li>对象头：对象头包含了<strong>Mark Word 、类型指针、对象数组长度</strong>这三个部分。（其中数组长度只有在是数组对象时才会存在）</li>
+<li>实例数据</li>
+<li>对齐填充：作用为将对象大小补齐为字节的倍数，如对象头和实例数据加起来为30位，就需要对齐填充2位</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%86%85%E5%AD%98%E5%B8%83%E5%B1%80.png" class title="对象内存布局">
+
+
+
+<h3 id="1-2-内存分配"><a href="#1-2-内存分配" class="headerlink" title="1.2 内存分配"></a>1.2 内存分配</h3><ul>
+<li><p>划分内存的方法：如堆中内存空间整齐，采用指针碰撞（指针依次向后移动），如不整齐，采用空闲列表，记录每个位置是否已经存放对象</p>
+</li>
+<li><p>并发安全：<strong>CAS机制</strong>，如果有线程在访问，就自旋等待，再次访问时如访问位置不为空闲，就去访问下一个位置。或者采用<strong>本地线程缓存（TLAB）</strong>，在Eden区中划分一个内存大小为Eden百分之一的TLAB区，把每个线程对应的对象数据放入TLAB区，类似于ThreadLocal</p>
+</li>
+<li><p>堆中内存区域：</p>
+<ul>
+<li>新生代：占堆的三分之一大小，又细分为Eden，From，To三个区，内存比例为8：1：1，因为经过大数据调查显示，对象进入Eden区第一次GC，百分之九十都会被回收，而为了避免From或者To内存溢出，只有一半是有效内存</li>
+<li>老年代：占堆的三分之二大小</li>
+<li>新生代和老年代有着各自的垃圾回收器，新生代为Minor GC，老年代为Major GC，或者全局的Full GC</li>
+</ul>
+</li>
+<li><p>具体内存分配过程：</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D.png" class title="内存分配">
+
+<p>(1)优先进行逃逸分析，判断对象是否可以在栈中分配（如对象只存在于一个方法体中，没有其他方法调用，没有其他线程调用，就可以分配在栈中，因为对象会随着栈帧的出栈而回收）。</p>
+<p>(2)无法分配到栈中的对象就送入堆中，如果为大对象，直接存入老年代,如果不为大对象，但是采用了本地线程缓存，就存入TLAB区，如果都不满足，就存入Eden区的其余位置。</p>
+<p>(3)放入Eden区中的对象，在GC时，没有被回收的对象将会放入From区，再次GC还未被回收的对象就送入To区，一直来回存放，目的是避免From区和To区内存溢出，每进行一次GC，就把未回收的对象放入空的区中，将不为空的区全部回收，下一次继续进行这样的操作。存活的对象每进行一次位置转移，就把对象头中的age信息加一，age为四位，最大为15，所以在15次GC后要是对象还存活，就放入老年代。但是有一个例外，JVM为了防止From区和To区内存不足，如果GC时几个对象加起来大小很大，就直接放入老年代，无需等到age达到15，这个称为<strong>对象动态年龄判定</strong>。</p>
+<p>(4)为了保证老年代内存空间不溢出，JVM会在每一次有对象进入老年代时进行一次老年代GC，但是这样做很消耗内存，所以有一个<strong>空间分配担保</strong>，对象放入老年代时先不进行垃圾回收，如果老年代内存不够用了，再进行垃圾回收。还有一种<strong>空间分配担保</strong>，就是当From或者To区放不下时，让对象直接进入老年区。</p>
+</li>
+<li><p>内存分配的规则</p>
+<ul>
+<li>对象优先在Eden区分配</li>
+<li>大对象直接分配到老年代</li>
+<li>空间分配担保</li>
+<li>长期存活对象进入老年代</li>
+<li>对象年龄动态判定</li>
+</ul>
+</li>
+<li><p>优化： 本地线程缓冲（TLAB）</p>
+</li>
+</ul>
+<h3 id="1-3-内存空间初始化"><a href="#1-3-内存空间初始化" class="headerlink" title="1.3 内存空间初始化"></a>1.3 内存空间初始化</h3><p>​    内存分配完成后，虚拟机需要将分配到的内存空间都初始化为零值(如int值为0，boolean值为false等等)。这一步操作保证了对象的实例字段在Java代码中可以不赋初始值就直接使用，程序能访问到这些字段的数据类型所对应的零值。</p>
+<h2 id="2-对象访问定位"><a href="#2-对象访问定位" class="headerlink" title="2. 对象访问定位"></a>2. 对象访问定位</h2><ul>
+<li><p>句柄访问：每个对象的引用持有一个句柄，句柄中存放了到对象实例数据、对象类型数据的指针</p>
+</li>
+<li><p>直接指针访问：每个对象的的引用直接持有对象实例数据，还有对象类型指针</p>
+</li>
+<li><p>对比：</p>
+<p>优点：句柄访问可以在对象实例位置发生改变时不用重新分配引用的指针，直接指针访问可以只进行一次指针访问，速度快，效率高。</p>
+<p>缺点：句柄访问要进行两次指针访问，效率低，速度慢，直接指针访问在对象实例位置发生改变时需要重新定位。</p>
+</li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E8%AE%BF%E9%97%AE%E5%AE%9A%E4%BD%8D.png" class title="对象访问定位">
+
+
+
+<h2 id="3-对象存活判断"><a href="#3-对象存活判断" class="headerlink" title="3. 对象存活判断"></a>3. 对象存活判断</h2><ul>
+<li>引用计数算法（无法解决对象互相引用的问题）：JVM维护一个变量，每创建一个对象就加一，回收一个就减一，直到为0就是全部回收完毕</li>
+<li>可达性分析：JVM将一些特别的对象（静态变量、常量池、虚拟机栈中引用的对象、JNI指针等等），定义为GC Root，当持有引用时就建立了关联，只要对象到GC Root之间有一条有关联的道路，就判断为对象存活</li>
+<li>但是不是经历了可达性分析不存活的对象就一定会被回收，在第一次可达性分析要被回收后，会进行一次筛选，如果类内部重写了finalized方法，就会执行一次此方法，可以在这个方法中自行救活对象，但是第二次回收就会直接回收。<strong>注意：finalized方法优先级很低，所以不建议使用</strong></li>
+</ul>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%AF%B9%E8%B1%A1%E5%AD%98%E6%B4%BB.png" class title="对象存活">
+
+
+
+<h2 id="4-各种引用"><a href="#4-各种引用" class="headerlink" title="4. 各种引用"></a>4. 各种引用</h2><ul>
+<li><p>强引用：用 = 创建的对象，无论如何都不会被回收</p>
+</li>
+<li><p>软引用（softReference）：在JVM发生OOM时GC才会被回收</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-1.png" class title="软引用-1">
+
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E8%BD%AF%E5%BC%95%E7%94%A8-2.png" class title="软引用-2">
+</li>
+<li><p>弱引用（WeakReference）：在GC时就会回收</p>
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-1.png" class title="弱引用-1">
+
+<img src="/2020/09/07/java%E8%99%9A%E6%8B%9F%E6%9C%BA/%E5%BC%B1%E5%BC%95%E7%94%A8-2.png" class title="弱引用-2">
+</li>
+<li><p>虚引用：随时都会被回收，唯一作用就是监视垃圾回收器是否正常运行</p>
+</li>
+<li><p><strong><em>注意：</em></strong>软引用和弱引用，可以用在内存资源紧张的情况下以及创建不是很重要的数据缓存。当系统内存不足的时候，缓存中的内容是可以被释放（比如图片缓存）。实际运用（WeakHashMap、ThreadLocal）</p>
+</li>
+</ul>
+<h1 id="三、-垃圾回收器"><a href="#三、-垃圾回收器" class="headerlink" title="三、 垃圾回收器"></a>三、 垃圾回收器</h1><h2 id="1-垃圾回收算法"><a href="#1-垃圾回收算法" class="headerlink" title="1.垃圾回收算法"></a>1.垃圾回收算法</h2><h3 id="1-1-复制算法（Copying）"><a href="#1-1-复制算法（Copying）" class="headerlink" title="1.1 复制算法（Copying）"></a>1.1 复制算法（Copying）</h3><p>​    将可用内存按容量划分为大小相等的两块，每次只使用其中的一块。当这一块的内存用完了，就将还存活着的对象复制到另外一块上面，然后再把已使用过的内存空间一次清理掉。这样使得每次都是对整个半区进行内存回收，内存分配时也就不用考虑内存碎片等复杂情况，只要按顺序分配内存即可，实现简单，运行高效。只是这种算法的代价是将内存缩小为了原来的一半。</p>
+<p>​    专门研究表明，新生代中的对象98%是“朝生夕死”的，所以并不需要按照1:1的比例来划分内存空间，而是将内存分为一块较大的Eden空间和两块较小的Survivor空间，每次使用Eden和其中一块Survivor[1]。当回收时，将Eden和Survivor中还存活着的对象一次性地复制到另外一块Survivor空间上，最后清理掉Eden和刚才用过的Survivor空间。（分代收集理论）</p>
+<p>​    HotSpot虚拟机默认Eden和Survivor的大小比例是8:1，也就是每次新生代中可用内存空间为整个新生代容量的90%（80%+10%），只有10%的内存会被“浪费”。当然，98%的对象可回收只是一般场景下的数据，我们没有办法保证每次回收都只有不多于10%的对象存活，当Survivor空间不够用时，需要依赖其他内存（这里指老年代）进行分配担保（Handle Promotion）</p>
+<h3 id="1-2-标记-清除算法（Mark-Sweep）"><a href="#1-2-标记-清除算法（Mark-Sweep）" class="headerlink" title="1.2 标记-清除算法（Mark-Sweep）"></a>1.2 标记-清除算法（Mark-Sweep）</h3><p>​    算法分为“标记”和“清除”两个阶段：首先标记出所有需要回收的对象，在标记完成后统一回收所有被标记的对象。它的主要不足空间问题，标记清除之后会产生大量不连续的内存碎片，空间碎片太多可能会导致以后在程序运行过程中需要分配较大对象时，无法找到足够的连续内存而不得不提前触发另一次垃圾收集动作。</p>
+<h3 id="1-3-标记-整理算法（Mark-Compact）"><a href="#1-3-标记-整理算法（Mark-Compact）" class="headerlink" title="1.3 标记-整理算法（Mark-Compact）"></a>1.3 标记-整理算法（Mark-Compact）</h3><p>​    首先标记出所有需要回收的对象，在标记完成后，后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，然后直接清理掉端边界以外的内存。标记整理算法虽然没有内存碎片，但是效率偏低。</p>
+<h2 id="2-JVM中常见的垃圾收集器"><a href="#2-JVM中常见的垃圾收集器" class="headerlink" title="2. JVM中常见的垃圾收集器"></a>2. JVM中常见的垃圾收集器</h2><h3 id="2-1-分代收集的思想"><a href="#2-1-分代收集的思想" class="headerlink" title="2.1 分代收集的思想"></a>2.1 分代收集的思想</h3><p>​    在新生代中，每次垃圾收集时都发现有大批对象死去，只有少量存活，那就选用复制算法，只需要付出少量存活对象的复制成本就可以完成收集。</p>
+<p>​    而老年代中因为对象存活率高、没有额外空间对它进行分配担保，就必须使用“标记—清理”或者“标记—整理”算法来进行回收。</p>
+<p>​    <strong>请记住下图的垃圾收集器和之间的连线关系。</strong></p>
+
+
+
+
+<table>
+<thead>
+<tr>
+<th align="center"><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Serial</td>
+<td>新生代，复制算法</td>
+<td>单线程</td>
+<td></td>
+<td>简单高效；适合内存不大的情况；</td>
+</tr>
+<tr>
+<td align="center">ParNew</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>ParNew垃圾收集器是Serial收集器的多线程版本</td>
+<td>搭配CMS垃圾回收器的首选</td>
+</tr>
+<tr>
+<td align="center">Parallel Scavenge吞吐量优先收集器</td>
+<td>新生代，复制算法</td>
+<td>并行的多线程收集器</td>
+<td>类似ParNew，更加关注吞吐量，达到一个可控制的吞吐量；</td>
+<td>本身是Server级别多CPU机器上的默认GC方式，主要适合后台运算不需要太多交互的任务；</td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th><strong><em>收集器</em></strong></th>
+<th><strong><em>收集对象和算法</em></strong></th>
+<th><strong><em>收集器类型</em></strong></th>
+<th><strong><em>说明</em></strong></th>
+<th><strong><em>适用场景</em></strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Serial Old</td>
+<td>老年代，标记整理算法</td>
+<td>单线程</td>
+<td></td>
+<td>Client模式下虚拟机使用</td>
+</tr>
+<tr>
+<td>Parallel Old</td>
+<td>老年代，标记整理算法</td>
+<td>并行的多线程收集器</td>
+<td>Parallel Scavenge收集器的老年代版本，为了配合Parallel Scavenge的面向吞吐量的特性而开发的对应组合；</td>
+<td>在注重吞吐量以及CPU资源敏感的场合采用</td>
+</tr>
+<tr>
+<td>CMS</td>
+<td>老年代，标记清除算法</td>
+<td>并行与并发收集器</td>
+<td>尽可能的缩短垃圾收集时用户线程停止时间；缺点在于： 1.内存碎片 2.需要更多cpu资源 3.浮动垃圾问题，需要更大的堆空间</td>
+<td>重视服务的响应速度、系统停顿时间和用户体验的互联网网站或者B/S系统。互联网后端目前cms是主流的垃圾回收器；</td>
+</tr>
+<tr>
+<td>G1</td>
+<td>跨新生代和老年代；标记整理 + 化整为零</td>
+<td>并行与并发收集器</td>
+<td>JDK1.7才正式引入，采用分区回收的思维，基本不牺牲吞吐量的前提下完成低停顿的内存回收；可预测的停顿是其最大的优势；</td>
+<td>面向服务端应用的垃圾回收器，目标为取代CMS</td>
+</tr>
+</tbody></table>
+<p>并行：垃圾收集的多线程的同时进行。</p>
+<p>并发：垃圾收集的多线程和应用的多线程同时进行。</p>
+<p>注：吞吐量=运行用户代码时间/(运行用户代码时间+ 垃圾收集时间)</p>
+<p>垃圾收集时间= 垃圾回收频率 * 单次垃圾回收时间</p>
+<h3 id="2-2-垃圾回收器工作示意图"><a href="#2-2-垃圾回收器工作示意图" class="headerlink" title="2.2 垃圾回收器工作示意图"></a>2.2 垃圾回收器工作示意图</h3><ul>
+<li><p>Serial/Serial Old</p>
+<p>最古老的，单线程，独占式，成熟，适合单CPU  服务器</p>
+<p>-XX:+UseSerialGC 新生代和老年代都用串行收集器</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+<p>-XX:+UseParallelGC 新生代使用ParallerGC，老年代使用Serial Old</p>
+</li>
+<li><p>ParNew</p>
+<p>和Serial基本没区别，唯一的区别：多线程，多CPU的，停顿时间比Serial少</p>
+<p>-XX:+UseParNewGC 新生代使用ParNew，老年代使用Serial Old</p>
+</li>
+<li><p>Parallel Scavenge（ParallerGC）/Parallel Old</p>
+<p>​    关注吞吐量的垃圾收集器，高吞吐量则可以高效率地利用CPU时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务。</p>
+<p>​    所谓吞吐量就是CPU用于运行用户代码的时间与CPU总消耗时间的比值，即吞吐量=运行用户代码时间/（运行用户代码时间+垃圾收集时间），虚拟机总共运行了100分钟，其中垃圾收集花掉1分钟，那吞吐量就是99%。</p>
+</li>
+<li><p>Concurrent Mark Sweep （CMS）</p>
+ 
+
+<p>​    CMS收集器是一种以获取<strong>最短回收停顿时间</strong>为目标的收集器。目前很大一部分的Java应用集中在互联网站或者B/S系统的服务端上，这类应用尤其重视服务的响应速度，希望系统停顿时间最短，以给用户带来较好的体验。CMS收集器就非常符合这类应用的需求。</p>
+<p>​    从名字（包含“Mark Sweep”）上就可以看出，CMS收集器是基于<strong>“标记—清除”算法</strong>实现的，它的运作过程相对于前面几种收集器来说更复杂一些，整个过程分为4个步骤，包括：</p>
+<p><strong>l</strong> <strong><em>初始标记</em></strong>——短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快</p>
+<p><strong>l</strong> <strong><em>并发标记</em></strong>——长，和用户的应用程序同时进行，进行GC Roots追踪的过程</p>
+<p><strong>l</strong> <strong><em>重新标记</em></strong>——短暂，为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短</p>
+<p><strong>l</strong> <strong><em>并发清除</em></strong>——长，清除掉标记的对象</p>
+<p><strong>l 优点：</strong></p>
+<p>​    由于整个过程中耗时最长的并发标记和并发清除过程收集器线程都可以与用户线程一起工作，所以，从总体上来说，CMS收集器的内存回收过程是与用户线程一起并发执行的，用户体验好。</p>
+<p>-XX:+UseConcMarkSweepGC ，表示新生代使用ParNew，老年代的用CMS</p>
+<p><strong>l 缺点：</strong></p>
+<ul>
+<li><p>浮动垃圾</p>
+<p>​    由于CMS并发清理阶段用户线程还在运行着，伴随程序运行自然就还会有新的垃圾不断产生，这一部分垃圾出现在标记过程之后，CMS无法在当次收集中处理掉它们，只好留待下一次GC时再清理掉。这一部分垃圾就称为“浮动垃圾”。</p>
+<p>​    为了防止浮动垃圾导致OOM，每次在老年代内存被占了80%时就会进行GC，如果还是OOM了，就让Serial Old 进行处理，这是STW会特别多，影响用户体验。</p>
+</li>
+<li><p>内存碎片</p>
+<p>因为CMS采用的是标记——清除算法，所以会存在内存碎片，导致GC提前进行。</p>
+</li>
+<li><p>CPU敏感：CPU小于4时影响性能</p>
+</li>
+</ul>
+</li>
+<li><p>G1</p>
+  
+
+<p>-XX:+UseG1GC</p>
+<ul>
+<li><p>并发标记周期</p>
+<ul>
+<li><p>初始标记</p>
+<p>​    短暂，仅仅只是标记一下GC Roots能直接关联到的对象，速度很快，产生一个全局停顿，都伴随有一次新生代的GC。</p>
+</li>
+<li><p>根区域扫描</p>
+<p>扫描survivor区可以直接到达的老年代区域。</p>
+</li>
+<li><p>并发标记阶段</p>
+<p>扫描和查找整个堆的存活对象，并标记。</p>
+</li>
+<li><p>重新标记</p>
+<p>会产生全局停顿，对并发标记阶段的结果进行修正。</p>
+</li>
+<li><p>独占清理</p>
+<p>会产生全局停顿，对GC回收比例进行排序，供混合收集阶段使用。</p>
+</li>
+<li><p>并发清理</p>
+<p>识别并清理完全空闲的区域，并发进行。</p>
+</li>
+</ul>
+</li>
+<li><p>并行与并发</p>
+<p>​    G1能充分利用多CPU、多核环境下的硬件优势，使用多个CPU（CPU或者CPU核心）来缩短Stop-The-World停顿的时间，部分其他收集器原本需要停顿Java线程执行的GC动作，G1收集器仍然可以通过并发的方式让Java程序继续执行。</p>
+</li>
+<li><p>分代收集</p>
+<p>​    与其他收集器一样，分代概念在G1中依然得以保留。虽然G1可以不需要其他收集器配合就能独立管理整个GC堆，但它能够采用不同的方式去处理新创建的对象和已经存活了一段时间、熬过多次GC的旧对象以获取更好的收集效果。</p>
+
+</li>
+<li><p>空间整合</p>
+<p>​    与CMS的“标记—清理”算法不同，G1从整体来看是基于“标记—整理”算法实现的收集器，从局部（两个Region之间）上来看是基于“复制”算法实现的，但无论如何，这两种算法都意味着G1运作期间不会产生内存空间碎片，收集后能提供规整的可用内存。这种特性有利于程序长时间运行，分配大对象时不会因为无法找到连续内存空间而提前触发下一次GC。</p>
+</li>
+<li><p>内存布局</p>
+<p>​    在G1之前的其他收集器进行收集的范围都是整个新生代或者老年代，而G1不再是这样。使用G1收集器时，Java堆的内存布局就与其他收集器有很大差别，它将整个Java堆划分为多个大小相等的独立区域（Region），虽然还保留有新生代和老年代的概念，但新生代和老年代不再是物理隔离的了，它们都是一部分Region（不需要连续）的集合。</p>
+</li>
+<li><p>混合收集</p>
+<ul>
+<li><p>对含有垃圾比例较高的Region进行回收。</p>
+</li>
+<li><p>G1当出现内存不足的的情况，也可能进行的FullGC回收。</p>
+</li>
+<li><p>G1中重要的参数：</p>
+<p>-XX:MaxGCPauseMillis 指定目标的最大停顿时间，G1尝试调整新生代和老年代的比例，堆大小，晋升年龄来达到这个目标时间。</p>
+<p>-XX:ParallerGCThreads：设置GC的工作线程数量</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="3-Stop-The-World现象"><a href="#3-Stop-The-World现象" class="headerlink" title="3. Stop The World现象"></a>3. Stop The World现象</h2><p>STW就是暂停用户线程。</p>
+<p>GC收集器和我们GC调优的目标就是尽可能的减少STW的时间和次数。</p>
+<h2 id="4-未来的垃圾回收"><a href="#4-未来的垃圾回收" class="headerlink" title="4. 未来的垃圾回收"></a>4. 未来的垃圾回收</h2><p>​    ZGC通过技术手段把stw的情况控制在仅有一次，就是第一次的初始标记才会发生，这样也就不难理解为什么GC停顿时间不随着堆增大而上升了，再大我也是通过并发的时间去回收了。</p>
+<p>​    关键技术：</p>
+<p>​    <strong>1.</strong> <strong><em>有色指针（Colored Pointers）</em></strong></p>
+<p>​    <strong>2.</strong> <strong><em>加载屏障（Load Barrier）</em></strong></p>
+<h2 id="5-常量池与String"><a href="#5-常量池与String" class="headerlink" title="5. 常量池与String"></a>5. 常量池与String</h2><p>​    常量池有很多概念，包括运行时常量池、class常量池、字符串常量池。</p>
+<p>​    虚拟机规范只规定以上区域属于方法区，并没有规定虚拟机厂商的实现。</p>
+<p>​    严格来说是静态常量池和运行时常量池，静态常量池是存放字符串字面量、符号引用以及类和方法的信息，而运行时常量池存放的是运行时一些直接引用。<br>​    运行时常量池是在类加载完成之后，将静态常量池中的符号引用值转存到运行时常量池中，类在解析之后，将符号引用替换成直接引用。<br>​    这两个常量池在JDK1.7版本之后，就移到堆内存中了，这里指的是物理空间，而逻辑上还是属于方法区（方法区是逻辑分区）。</p>
+<ul>
+<li><p>字面量</p>
+<p>给基本类型变量赋值的方式就叫做字面量或者字面值。</p>
+<p>比如：int i=120; long j=10L;</p>
+</li>
+<li><p>符号引用</p>
+<p>​    包括类和方法的全限定名（例如 String 这个类，它的全限定名就是 Java/lang/String）、字段的名称和描述符以及方法的名称和描述符。</p>
+</li>
+<li><p>直接引用</p>
+<p>具体对象的索引值。</p>
+</li>
+<li><p>String的初始赋值</p>
+ 
+
+<pre><code>而如果调用了insern方法，就是直接在字符串常量池中找字符串，如果没有再创建，返回的是字符串常量池的引用。</code></pre></li>
+</ul>
+<h1 id="四、类加载"><a href="#四、类加载" class="headerlink" title="四、类加载"></a>四、类加载</h1><h2 id="1-ART和Dalvik"><a href="#1-ART和Dalvik" class="headerlink" title="1. ART和Dalvik"></a>1. ART和Dalvik</h2><p>​    Android应用程序运行在Dalvik/ART虚拟机，并且每一个应用程序对应有一个单独的Dalvik虚拟机实例。Dalvik虚拟机实则也算是一个Java虚拟机，只不过它执行的不是class文件，而是dex文件。</p>
+<p>​    Dalvik虚拟机与Java虚拟机共享有差不多的特性，差别在于两者执行的指令集是不一样的，前者的指令集是基本寄存器的，而后者的指令集是基于堆栈的。</p>
+
+
+
+
+<ul>
+<li><p>基于寄存器的虚拟机：</p>
+<p>​    相当于把基于堆栈的虚拟机的局部变量表和操作数栈合并为了一个虚拟寄存器，模仿CPU寄存器操作，将指令运行步骤大大减少。</p>
+</li>
+</ul>
+<p>​    （1）Dalvik虚拟机执行的是dex字节码，是解释执行，在Android2.2后，加入了JIT（即时编译技术），在运行时可以选择经常执行的代码进行编译优化，在本次程序执行完毕后会清除记录。</p>
+<p>​    （2）在Android5.0后，默认使用ART虚拟机，直接执行本地机器码，而把dex字节码编译成机器码的东西就是AOT（预先编译技术），在程序安装时进行预编译，将应用直接编译为机器码，但是这样的弊端就是安装会非常慢。</p>
+<p>​    （3）在安装时，dalvik将.dex文件优化为.odex文件，ART将.dex文件优化为机器码文件。</p>
+<p>​    （4）Android N ：混合编译，在第一次安装时不执行AOT（安装速度变快），在运行的同时进行JIT，将经常运行的代码进行编译，并保存到Profile文件下。在手机充电或者闲置时，通过AOT技术将Profile文件下的代码进行编译，保存机器码，下次运行时直接使用。</p>
+<h2 id="2-Android类加载器"><a href="#2-Android类加载器" class="headerlink" title="2. Android类加载器"></a>2. Android类加载器</h2>
+
+<p>全局getClassLoader获取到的就是PathClassLoader</p>
+<p>​    类加载过程：</p>
+<ul>
+<li><p>loadClass</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; loadClass(String name, <span class="keyword">boolean</span> resolve)                         <span class="keyword">throws</span> ClassNotFoundException</span><br><span class="line">    &#123;</span><br><span class="line">    Class&lt;?&gt; c = findLoadedClass(name);<span class="comment">//寻找是否已经加载</span></span><br><span class="line">    <span class="keyword">if</span>(c == <span class="keyword">null</span>)&#123;</span><br><span class="line">        <span class="comment">//如果没有加载，首先找父加载器，这里的父加载器是BootClassLoader</span></span><br><span class="line">        c = parent.loadClass(name, <span class="keyword">false</span>);</span><br><span class="line">        <span class="keyword">if</span> (c == <span class="keyword">null</span>) &#123;</span><br><span class="line">        	<span class="comment">//如果还是未加载，就使用自己的类加载器进行加载</span></span><br><span class="line">        	c = findClass(name);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>这里采用的是双亲委派模型，先让父加载器加载，再让自己加载。</p>
+<p>原因：</p>
+<ul>
+<li>安全性：无法恶意篡改系统已有的类，因为会被BootClassLoader直接加载，加载的是系统层的类</li>
+<li>避免重复加载</li>
+</ul>
+</li>
+<li><p>findLoadedClass 调用的是VMClassLoader类里的方法，直接是native层</p>
+</li>
+<li><p>parent.loadClass</p>
+<p>调用到BaseDexClassLoader的findClass方法。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException&#123;</span><br><span class="line">    Class c = pathList.findClass(name, suppressedExceptions);</span><br><span class="line">    <span class="keyword">return</span> c;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>而pathList是一个DexPathList对象。</p>
+<p>在pathList中又有一个element数组用于存放多个dex文件。</p>
+<p>最后遍历编译。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"> <span class="keyword">private</span> Element[] dexElements;</span><br><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">     <span class="keyword">for</span> (Element element : dexElements) &#123;</span><br><span class="line">            Class&lt;?&gt; clazz = element.findClass(name, definingContext, suppressed);</span><br><span class="line">            <span class="keyword">if</span> (clazz != <span class="keyword">null</span>) &#123;</span><br><span class="line">                <span class="keyword">return</span> clazz;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">public</span> Class&lt;?&gt; findClass(String name, ClassLoader definingContext,</span><br><span class="line">                List&lt;Throwable&gt; suppressed) &#123;</span><br><span class="line">            <span class="keyword">return</span> dexFile != <span class="keyword">null</span> ? dexFile.loadClassBinaryName(name, definingContext, suppressed)</span><br><span class="line">                    : <span class="keyword">null</span>;</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
+
+<p>直接loadClassBinaryName把dex文件编译加载好。</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> Element[] makeDexElements(List&lt;File&gt; files, File optimizedDirectory,</span><br><span class="line">           List&lt;IOException&gt; suppressedExceptions, ClassLoader loader, <span class="keyword">boolean</span> isTrusted)</span><br></pre></td></tr></table></figure>
+
+<p>通过这个方法把element数组初始化，在热修复时也可以通过这个方法，把dex文件构造成element数组，放在pathList中dexElements的最前面。</p>
+</li>
+</ul>
+  
+
+<ul>
+<li><p>findClass</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">protected</span> Class&lt;?&gt; findClass(String name) <span class="keyword">throws</span> ClassNotFoundException &#123;</span><br><span class="line">       <span class="keyword">return</span> Class.classForName(name, <span class="keyword">false</span>, <span class="keyword">null</span>);</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>直接寻找类名并加载。</p>
+</li>
+</ul>
 ]]></content>
   </entry>
 </search>
